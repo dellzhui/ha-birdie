@@ -27,10 +27,11 @@
       "local_name": "Birdie Pro*"
     }
   ],
-  "codeowners": [],
+  "codeowners": ["@dellzhui"],
   "config_flow": true,
   "dependencies": ["bluetooth", "bluetooth_adapters"],
-  "documentation": "https://github.com/example/birdie",
+  "documentation": "https://github.com/dellzhui/ha-birdie",
+  "issue_tracker": "https://github.com/dellzhui/ha-birdie/issues",
   "integration_type": "device",
   "iot_class": "local_push",
   "requirements": [],

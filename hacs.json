@@ -1,7 +1,5 @@
 {
   "name": "Birdie",
   "content_in_root": false,
-  "render_readme": true,
-  "domains": ["sensor", "binary_sensor", "number"],
   "homeassistant": "2024.6.0"
 }
