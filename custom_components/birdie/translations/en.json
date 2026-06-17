@@ -1,0 +1,28 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "This Birdie device is already configured.",
+      "not_supported": "The discovered Bluetooth device is not a supported Birdie device."
+    },
+    "error": {
+      "no_devices_found": "No Birdie devices were discovered. You can still add one manually by entering its Bluetooth address."
+    },
+    "progress": {
+      "scan": "Scanning for Birdie Bluetooth devices..."
+    },
+    "step": {
+      "bluetooth_confirm": {
+        "title": "Add Birdie device",
+        "description": "Add {name} to Home Assistant?"
+      },
+      "user": {
+        "title": "Add Birdie device",
+        "description": "Select a discovered Birdie device, or enter the Bluetooth address manually.",
+        "data": {
+          "address": "Bluetooth address",
+          "name": "Name"
+        }
+      }
+    }
+  }
+}
