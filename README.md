@@ -1,23 +1,45 @@
-# Birdie Home Assistant Custom Integration
+# Birdie Home Assistant Integration
 
-Home Assistant custom integration for Birdie and Birdie Pro BLE devices.
+[![HACS validation](https://github.com/dellzhui/ha-birdie/actions/workflows/hacs.yml/badge.svg)](https://github.com/dellzhui/ha-birdie/actions/workflows/hacs.yml)
+[![Hassfest validation](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml/badge.svg)](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml)
 
-The integration domain is `birdie`. `Birdie Pro` is a device model name and is
-not used as the Home Assistant domain.
+Birdie is a Home Assistant custom integration for Birdie BLE air quality
+monitors, including Birdie Pro.
+
+## Status
+
+Current release: `v0.1.0`
+
+The integration is available for installation through HACS as a custom
+repository. Submission to the HACS default repository is in progress; until it is
+approved, add this repository manually in HACS.
 
 ## Features
 
 - UI setup flow using Home Assistant Bluetooth discovery.
-- BLE connection, initial reads, notifications, disconnect handling, and writes.
-- CO2, temperature, humidity, Birdie state, and battery sensors.
-- CO2 alarm binary sensor.
-- CO2 threshold and cool down period number entities.
-- A standalone `tools/birdie_probe.py` script for BLE discovery, service dumps,
-  characteristic reads, and notification debugging.
+- Native Home Assistant Bluetooth support.
+- ESPHome Bluetooth Proxy support when active connections are enabled.
+- Initial BLE reads and live updates through GATT notifications.
+- Disconnect handling with unavailable entity states.
+- Writable configuration entities for CO2 threshold and cool down period.
+- Standalone BLE probe tool for setup verification and diagnostics.
+
+## Entities
+
+| Entity | Platform | Unit | Notes |
+| --- | --- | --- | --- |
+| CO2 | Sensor | ppm | Carbon dioxide measurement |
+| Temperature | Sensor | Celsius | Temperature measurement |
+| Humidity | Sensor | % | Relative humidity measurement |
+| State | Sensor | - | `up`, `down`, `cooldown`, or `unknown` |
+| CO2 alarm | Binary sensor | - | On when Birdie reports alarm state |
+| Battery | Sensor | % | Battery level mapped from the device enum |
+| CO2 threshold | Number | ppm | Writable, 400-5000 ppm |
+| Cool down period | Number | min | Writable, 1-240 min |
 
 ## Installation
 
-### HACS custom repository
+### HACS Custom Repository
 
 1. Open HACS.
 2. Go to **Integrations**.
@@ -33,44 +55,42 @@ not used as the Home Assistant domain.
 7. Restart Home Assistant.
 8. Add the integration from **Settings > Devices & services**.
 
-### Manual installation
+### HACS Default Repository
+
+Once the HACS default repository submission is approved, Birdie will be
+installable by searching for **Birdie** directly in HACS.
+
+### Manual Installation
 
 Copy `custom_components/birdie` into your Home Assistant `custom_components`
 directory and restart Home Assistant.
 
-## Bluetooth Notes
+## Bluetooth Requirements
 
-For HAOS or native Bluetooth setups, first add the Home Assistant-discovered
-Bluetooth adapter, such as `hci0`, from **Settings > Devices & services**. This
-enables Home Assistant's Bluetooth scanner. You do not need to pair Birdie and
-you do not need to enter the Birdie address manually when discovery works.
+### Home Assistant OS / Native Bluetooth
 
-For ESPHome Bluetooth Proxy setups, the proxy must support active connections:
+Add the discovered Bluetooth adapter, such as `hci0`, from **Settings > Devices
+& services**. This enables Home Assistant's Bluetooth scanner.
+
+Birdie does not need to be paired with the operating system. When discovery is
+working, the integration can be added from the Home Assistant UI without entering
+the BLE address manually.
+
+### ESPHome Bluetooth Proxy
+
+For ESPHome Bluetooth Proxy deployments, active connections must be enabled:
 
 ```yaml
 bluetooth_proxy:
   active: true
 ```
 
-Passive-only proxies may forward advertisements but cannot reliably connect to
-Birdie for GATT reads and notifications.
-
-## Entities
-
-The integration creates:
-
-- CO2 sensor
-- Temperature sensor
-- Humidity sensor
-- Birdie state sensor
-- CO2 alarm binary sensor
-- Battery sensor
-- CO2 threshold number
-- Cool down period number
+Passive-only proxies may forward advertisements, but they cannot perform the
+GATT reads, writes, and notification subscriptions required by this integration.
 
 ## Debug Logging
 
-To enable integration debug logs:
+To enable debug logs for this integration:
 
 ```yaml
 logger:
@@ -79,7 +99,10 @@ logger:
     custom_components.birdie: debug
 ```
 
-## BLE Probe
+## BLE Probe Tool
+
+The repository includes `tools/birdie_probe.py`, a standalone BLE diagnostic
+tool based on `bleak`. It does not depend on Home Assistant.
 
 Install `bleak` in the Python environment where you run the tool:
 
@@ -87,35 +110,40 @@ Install `bleak` in the Python environment where you run the tool:
 python -m pip install bleak
 ```
 
-Scan for nearby BLE devices and highlight Birdie candidates:
+Scan for nearby BLE devices:
 
 ```bash
 python tools/birdie_probe.py --scan
 ```
 
-Connect to a known BLE address, dump services, and read known characteristics:
+Connect to a known BLE address, dump GATT services, and read known
+characteristics:
 
 ```bash
 python tools/birdie_probe.py --address 4C:5B:B3:43:A8:19
 ```
 
-Connect and subscribe to notifications for CO2, temperature, humidity, Birdie
-state, and battery:
+Connect and subscribe to notifications for CO2, temperature, humidity, state,
+and battery:
 
 ```bash
 python tools/birdie_probe.py --address 4C:5B:B3:43:A8:19 --notify
 ```
 
-The test address above is only for probe/debug usage. The Home Assistant
-integration stores the selected Bluetooth address in a config entry and does not
-hard-code test hardware.
+The example address is for probe usage only. The Home Assistant integration uses
+Bluetooth discovery and stores the selected address in the config entry.
 
-## Planned Later Phases
+## Scope
 
-- Add diagnostics and deeper error handling after more real-device testing.
-- Add tests for config flow, parser behavior, and entity state updates.
+Implemented:
 
-## Out of Scope
+- Bluetooth discovery and UI setup flow.
+- BLE reads, notifications, and writes for the supported characteristics.
+- Sensors, binary sensor, and number entities for the current Birdie BLE data
+  model.
+- HACS-compatible repository structure and validation workflows.
+
+Not implemented:
 
 - OTA update.
 - Data log service support.
