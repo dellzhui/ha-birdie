@@ -15,9 +15,9 @@ from .const import (
     ENVIRONMENTAL_SERVICE_UUID,
     FIRMWARE_REVISION_CHARACTERISTIC_UUID,
     HARDWARE_VERSION_CHARACTERISTIC_UUID,
-    HUMIDITY_CHARACTERISTIC_UUID,
+    HUMIDITY_CHARACTERISTIC_UUIDS,
     IAQ_CO2_THRESHOLD_CHARACTERISTIC_UUID,
-    TEMPERATURE_CHARACTERISTIC_UUID,
+    TEMPERATURE_CHARACTERISTIC_UUIDS,
     UNKNOWN_STATE,
 )
 
@@ -144,9 +144,9 @@ def parse_characteristic_values(
     uuid = characteristic_uuid.lower()
     if uuid == CO2_CHARACTERISTIC_UUID:
         return {"co2_ppm": parse_co2_ppm(data)}
-    if uuid == TEMPERATURE_CHARACTERISTIC_UUID:
+    if uuid in TEMPERATURE_CHARACTERISTIC_UUIDS:
         return {"temperature_celsius": parse_temperature_celsius(data)}
-    if uuid == HUMIDITY_CHARACTERISTIC_UUID:
+    if uuid in HUMIDITY_CHARACTERISTIC_UUIDS:
         return {"humidity_percent": parse_humidity_percent(data)}
     if uuid == BIRDIE_STATE_CHARACTERISTIC_UUID:
         state, _name, _alarm = parse_birdie_state(data)
@@ -171,9 +171,9 @@ def parse_known_characteristic(
     uuid = characteristic_uuid.lower()
     if uuid == CO2_CHARACTERISTIC_UUID:
         return f"{parse_co2_ppm(data)} ppm"
-    if uuid == TEMPERATURE_CHARACTERISTIC_UUID:
+    if uuid in TEMPERATURE_CHARACTERISTIC_UUIDS:
         return f"{parse_temperature_celsius(data):.3f} deg C"
-    if uuid == HUMIDITY_CHARACTERISTIC_UUID:
+    if uuid in HUMIDITY_CHARACTERISTIC_UUIDS:
         return f"{parse_humidity_percent(data):.3f} %RH"
     if uuid == BIRDIE_STATE_CHARACTERISTIC_UUID:
         state, name, alarm = parse_birdie_state(data)
