@@ -39,9 +39,6 @@ async def async_setup_entry(hass: Any, entry: Any) -> bool:
         change: Any,
     ) -> None:
         """Reconnect when Home Assistant sees this BLE address again."""
-        _LOGGER.debug(
-            "Bluetooth callback for Birdie %s: %s", coordinator.address, change
-        )
         hass.async_create_task(coordinator.async_connect_if_expected())
 
     entry.async_on_unload(

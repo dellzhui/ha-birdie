@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
 import voluptuous as vol
@@ -13,7 +12,6 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
     async_register_callback,
-    async_scanner_count,
 )
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS
@@ -22,7 +20,6 @@ from .ble import is_birdie_advertisement, normalize_address
 from .const import CONF_NAME, DOMAIN, ENVIRONMENTAL_SERVICE_UUID
 
 DISCOVERY_TIMEOUT = 10
-_LOGGER = logging.getLogger(__name__)
 
 USER_SCHEMA = vol.Schema(
     {
@@ -59,23 +56,9 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle Bluetooth discovery."""
         if not _is_supported(discovery_info):
-            _LOGGER.debug(
-                "Ignoring Bluetooth discovery for %s name=%s service_uuids=%s connectable=%s",
-                discovery_info.address,
-                discovery_info.name,
-                discovery_info.service_uuids,
-                discovery_info.connectable,
-            )
             return self.async_abort(reason="not_supported")
 
         address = normalize_address(discovery_info.address)
-        _LOGGER.debug(
-            "Bluetooth discovery matched Birdie device %s name=%s service_uuids=%s connectable=%s",
-            address,
-            discovery_info.name,
-            discovery_info.service_uuids,
-            discovery_info.connectable,
-        )
         await self.async_set_unique_id(address)
         self._abort_if_unique_id_configured()
         self._discovery_info = discovery_info
@@ -168,15 +151,6 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _async_scan_for_devices(self) -> None:
         """Wait for Birdie advertisements and collect candidates."""
-        connectable_scanners = async_scanner_count(self.hass, connectable=True)
-        non_connectable_scanners = async_scanner_count(self.hass, connectable=False)
-        _LOGGER.debug(
-            "Scanning for Birdie BLE devices for %s seconds; HA Bluetooth scanner count: "
-            "connectable=%s non_connectable=%s",
-            DISCOVERY_TIMEOUT,
-            connectable_scanners,
-            non_connectable_scanners,
-        )
         current_ids = self._async_current_ids(include_ignore=False)
         self._async_collect_cached_discoveries(current_ids)
 
@@ -251,17 +225,10 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
     def _async_collect_cached_discoveries(self, current_ids: set[str]) -> None:
         """Collect Birdie candidates already cached by Home Assistant Bluetooth."""
         for connectable in (True, False):
-            count = 0
             for discovery_info in async_discovered_service_info(
                 self.hass, connectable=connectable
             ):
-                count += 1
                 self._async_add_discovery(discovery_info, current_ids)
-            _LOGGER.debug(
-                "Checked %d cached %s BLE discovery result(s)",
-                count,
-                "connectable" if connectable else "non-connectable",
-            )
 
     def _async_add_discovery(
         self,
@@ -273,20 +240,6 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
         if address in current_ids or address in self._discovered_devices:
             return False
         if not _is_supported(discovery_info):
-            _LOGGER.debug(
-                "Ignoring BLE device %s name=%s service_uuids=%s connectable=%s",
-                address,
-                discovery_info.name,
-                discovery_info.service_uuids,
-                discovery_info.connectable,
-            )
             return False
-        _LOGGER.debug(
-            "Discovered Birdie candidate %s name=%s service_uuids=%s connectable=%s",
-            address,
-            discovery_info.name,
-            discovery_info.service_uuids,
-            discovery_info.connectable,
-        )
         self._discovered_devices[address] = _discovery_title(discovery_info)
         return True

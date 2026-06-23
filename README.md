@@ -8,7 +8,7 @@ monitors, including Birdie Pro.
 
 ## Status
 
-Current release: `v0.1.0`
+Current release: `v0.1.1`
 
 The integration is available for installation through HACS as a custom
 repository. Submission to the HACS default repository is in progress; until it is
@@ -18,11 +18,12 @@ approved, add this repository manually in HACS.
 
 - UI setup flow using Home Assistant Bluetooth discovery.
 - Native Home Assistant Bluetooth support.
-- ESPHome Bluetooth Proxy support when active connections are enabled.
+- Tested ESPHome Bluetooth Proxy support when active connections are enabled.
 - Initial BLE reads and live updates through GATT notifications.
 - Disconnect handling with unavailable entity states.
 - Writable configuration entities for CO2 threshold and cool down period.
 - Standalone BLE probe tool for setup verification and diagnostics.
+- Birdie Pro firmware `1.6.0` and `1.6.1` BLE UUID compatibility.
 
 ## Entities
 
@@ -88,6 +89,22 @@ bluetooth_proxy:
 Passive-only proxies may forward advertisements, but they cannot perform the
 GATT reads, writes, and notification subscriptions required by this integration.
 
+## Compatibility
+
+Tested connection paths:
+
+- Home Assistant OS with native Bluetooth.
+- ESPHome Bluetooth Proxy with active connections enabled.
+
+Tested Birdie Pro firmware versions:
+
+- `1.6.0`
+- `1.6.1`
+
+Firmware `1.6.1` changes the temperature, humidity, and current time UUIDs. The
+integration supports both the current UUIDs and the legacy firmware `1.6.0`
+UUIDs.
+
 ## Debug Logging
 
 To enable debug logs for this integration:
@@ -141,6 +158,8 @@ Implemented:
 - BLE reads, notifications, and writes for the supported characteristics.
 - Sensors, binary sensor, and number entities for the current Birdie BLE data
   model.
+- Native Bluetooth and ESPHome Bluetooth Proxy connection paths.
+- Birdie Pro firmware `1.6.0` and `1.6.1` UUID compatibility.
 - HACS-compatible repository structure and validation workflows.
 
 Not implemented:

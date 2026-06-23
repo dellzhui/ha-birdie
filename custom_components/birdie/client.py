@@ -107,12 +107,8 @@ class BirdieBleClient:
 
         await close_stale_connections_by_address(self.address)
 
-        ble_device, client_class, client_kwargs, source = await self._async_ble_device()
-        _LOGGER.debug(
-            "Connecting to Birdie %s using %s", self.address, source
-        )
+        ble_device, client_class, client_kwargs = await self._async_ble_device()
         if ble_device is None:
-            _LOGGER.debug("No BLE device found for %s", self.address)
             return False
 
         self._expected_disconnect = False
@@ -128,12 +124,10 @@ class BirdieBleClient:
                 use_services_cache=False,
                 **client_kwargs,
             )
-        except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
-            _LOGGER.debug("Failed to connect to Birdie %s: %s", self.address, err)
+        except (BleakError, TimeoutError, asyncio.TimeoutError, OSError):
             return False
 
         if not client.is_connected:
-            _LOGGER.debug("Birdie %s did not report connected state", self.address)
             return False
 
         self._client = client
@@ -145,8 +139,7 @@ class BirdieBleClient:
             TimeoutError,
             asyncio.TimeoutError,
             OSError,
-        ) as err:
-            _LOGGER.debug("Failed to get GATT services from %s: %s", self.address, err)
+        ):
             await self.async_disconnect()
             return False
 
@@ -155,7 +148,7 @@ class BirdieBleClient:
 
     async def _async_ble_device(
         self,
-    ) -> tuple[BLEDevice | None, type[BaseBleakClient], dict[str, Any], str]:
+    ) -> tuple[BLEDevice | None, type[BaseBleakClient], dict[str, Any]]:
         """Return the BLE device and client class to use for this connection."""
         connectable_scanners = bluetooth.async_scanner_count(
             self._hass, connectable=True
@@ -169,7 +162,6 @@ class BirdieBleClient:
                 ha_ble_device,
                 BleakClient,
                 {"services": BIRDIE_GATT_SERVICE_UUIDS},
-                f"HA Bluetooth backend ({connectable_scanners} connectable scanner(s))",
             )
 
         bluez_device = await get_device(self.address)
@@ -178,7 +170,6 @@ class BirdieBleClient:
                 bluez_device,
                 BirdieBlueZClient,
                 {"bluez": {}, "services": BIRDIE_GATT_SERVICE_UUIDS},
-                f"direct BlueZ backend ({connectable_scanners} HA connectable scanner(s))",
             )
 
         if ha_ble_device is not None:
@@ -186,14 +177,12 @@ class BirdieBleClient:
                 ha_ble_device,
                 BleakClient,
                 {"services": BIRDIE_GATT_SERVICE_UUIDS},
-                f"HA Bluetooth fallback ({connectable_scanners} connectable scanner(s))",
             )
 
         return (
             bluez_device,
             BleakClient,
             {"services": BIRDIE_GATT_SERVICE_UUIDS},
-            f"generic fallback ({connectable_scanners} connectable scanner(s))",
         )
 
     async def async_read_initial(self) -> dict[str, Any]:
@@ -202,8 +191,7 @@ class BirdieBleClient:
         for uuid in READ_CHARACTERISTIC_UUIDS:
             try:
                 data = await self._async_read_uuid(uuid)
-            except BirdieBleError as err:
-                _LOGGER.debug("Unable to read %s from %s: %s", uuid, self.address, err)
+            except BirdieBleError:
                 continue
             try:
                 values.update(parse_characteristic_values(uuid, data))
@@ -225,16 +213,8 @@ class BirdieBleClient:
         for uuid in NOTIFY_CHARACTERISTIC_UUIDS:
             characteristic = services.get_characteristic(uuid)
             if characteristic is None:
-                _LOGGER.debug(
-                    "Notify characteristic %s is missing on %s", uuid, self.address
-                )
                 continue
             if "notify" not in characteristic.properties:
-                _LOGGER.debug(
-                    "Characteristic %s on %s does not support notify",
-                    uuid,
-                    self.address,
-                )
                 continue
 
             def _callback(
@@ -259,12 +239,6 @@ class BirdieBleClient:
                 continue
             self._notify_characteristics.append(characteristic)
 
-        _LOGGER.debug(
-            "Subscribed to %d Birdie notification characteristic(s) on %s",
-            len(self._notify_characteristics),
-            self.address,
-        )
-
     async def async_disconnect(self) -> None:
         """Disconnect and clean up notifications."""
         self._expected_disconnect = True
@@ -278,18 +252,13 @@ class BirdieBleClient:
             try:
                 await client.stop_notify(characteristic)
             except (BleakError, TimeoutError, asyncio.TimeoutError, OSError):
-                _LOGGER.debug(
-                    "Failed to stop notify for %s on %s",
-                    getattr(characteristic, "uuid", characteristic),
-                    self.address,
-                    exc_info=True,
-                )
+                pass
 
         if client.is_connected:
             try:
                 await client.disconnect()
             except (BleakError, TimeoutError, asyncio.TimeoutError, OSError):
-                _LOGGER.debug("Failed to disconnect from %s", self.address, exc_info=True)
+                pass
 
         self._client = None
         self._services = None
@@ -349,16 +318,13 @@ class BirdieBleClient:
         """Return services across Bleak versions."""
         services = getattr(client, "services", None)
         if self._services_have_known_characteristics(services):
-            self._log_service_summary(services)
             return services
         get_services = getattr(client, "get_services", None)
         if get_services is not None:
             services = await get_services()
             if self._services_have_known_characteristics(services):
-                self._log_service_summary(services)
                 return services
 
-        self._log_service_summary(services)
         raise BirdieBleError("GATT services do not include any Birdie characteristics")
 
     def _services_have_known_characteristics(self, services: Any | None) -> bool:
@@ -368,32 +334,6 @@ class BirdieBleClient:
         return any(
             services.get_characteristic(uuid) is not None
             for uuid in set(READ_CHARACTERISTIC_UUIDS + NOTIFY_CHARACTERISTIC_UUIDS)
-        )
-
-    def _log_service_summary(self, services: Any | None) -> None:
-        """Log a compact GATT service discovery summary."""
-        if not _LOGGER.isEnabledFor(logging.DEBUG):
-            return
-        if services is None:
-            _LOGGER.debug("GATT service discovery for %s returned no services", self.address)
-            return
-
-        service_values = getattr(services, "services", None) or ()
-        characteristic_values = getattr(services, "characteristics", None) or ()
-        service_uuids = [
-            getattr(service, "uuid", str(service))
-            for service in (
-                service_values.values()
-                if hasattr(service_values, "values")
-                else service_values
-            )
-        ]
-        _LOGGER.debug(
-            "GATT service discovery for %s returned %d service(s), %d characteristic(s): %s",
-            self.address,
-            len(service_values),
-            len(characteristic_values),
-            service_uuids,
         )
 
     def _get_characteristic(self, uuid: str) -> Any:
