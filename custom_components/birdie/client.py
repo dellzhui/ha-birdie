@@ -20,8 +20,9 @@ from bleak_retry_connector import (
 from homeassistant.components import bluetooth
 from homeassistant.core import HomeAssistant
 
-from .ble import bytes_to_hex, parse_characteristic_values
+from .ble import bytes_to_hex, parse_characteristic_values, parse_known_characteristic
 from .const import (
+    BIRDIE_STATE_CHARACTERISTIC_UUID,
     BIRDIE_GATT_SERVICE_UUIDS,
     CONNECT_TIMEOUT,
     COOL_DOWN_PERIOD_CHARACTERISTIC_UUID,
@@ -195,6 +196,13 @@ class BirdieBleClient:
                 continue
             try:
                 values.update(parse_characteristic_values(uuid, data))
+                if uuid == BIRDIE_STATE_CHARACTERISTIC_UUID:
+                    _LOGGER.debug(
+                        "Initial Birdie state read from %s: raw=[%s] parsed=%s",
+                        self.address,
+                        bytes_to_hex(data),
+                        parse_known_characteristic(uuid, data),
+                    )
             except ValueError as err:
                 _LOGGER.warning(
                     "Unable to parse %s from %s: raw=[%s] error=%s",
@@ -238,6 +246,11 @@ class BirdieBleClient:
                 )
                 continue
             self._notify_characteristics.append(characteristic)
+            if uuid == BIRDIE_STATE_CHARACTERISTIC_UUID:
+                _LOGGER.debug(
+                    "Subscribed to Birdie state notifications on %s",
+                    self.address,
+                )
 
     async def async_disconnect(self) -> None:
         """Disconnect and clean up notifications."""
@@ -370,6 +383,13 @@ class BirdieBleClient:
             )
             return
         if values:
+            if uuid == BIRDIE_STATE_CHARACTERISTIC_UUID:
+                _LOGGER.debug(
+                    "Birdie state notify from %s: raw=[%s] parsed=%s",
+                    self.address,
+                    bytes_to_hex(data),
+                    parse_known_characteristic(uuid, data),
+                )
             self._hass.loop.call_soon_threadsafe(self._data_callback, values)
 
     def _handle_disconnect(self, client: BleakClient | None = None) -> None:

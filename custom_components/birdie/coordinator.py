@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .ble import normalize_address
 from .client import BirdieBleClient, BirdieBleError
-from .const import CONF_NAME, DOMAIN
+from .const import BIRDIE_STATE_VALUES, CONF_NAME, DOMAIN, UNKNOWN_STATE
 from .models import BirdieData
 
 _LOGGER = logging.getLogger(__name__)
@@ -121,7 +121,23 @@ class BirdieCoordinator(DataUpdateCoordinator[BirdieData]):
     @callback
     def _async_handle_values(self, values: dict[str, Any]) -> None:
         """Merge parsed BLE values into coordinator data."""
-        self.async_set_updated_data(self.data.updated(**values))
+        previous_data = self.data
+        updated_data = previous_data.updated(**values)
+        if "birdie_state" in values:
+            _LOGGER.debug(
+                (
+                    "Birdie state coordinator update for %s: %s -> %s; "
+                    "co2=%s ppm threshold=%s ppm alarm=%s available=%s"
+                ),
+                self.address,
+                _state_value(previous_data.birdie_state),
+                _state_value(updated_data.birdie_state),
+                updated_data.co2_ppm,
+                updated_data.co2_threshold_ppm,
+                updated_data.co2_alarm,
+                updated_data.available,
+            )
+        self.async_set_updated_data(updated_data)
 
     @callback
     def _async_handle_disconnect(self) -> None:
@@ -134,3 +150,10 @@ class BirdieCoordinator(DataUpdateCoordinator[BirdieData]):
         if self.data.available == available:
             return
         self.async_set_updated_data(self.data.updated(available=available))
+
+
+def _state_value(state: int | None) -> str:
+    """Return a readable Birdie state for debug logging."""
+    if state is None:
+        return UNKNOWN_STATE
+    return BIRDIE_STATE_VALUES.get(state, UNKNOWN_STATE)
