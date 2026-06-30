@@ -8,7 +8,7 @@ monitors, including Birdie Pro.
 
 ## Status
 
-Current release: `v0.1.1`
+Current release: `v0.1.3`
 
 The integration is available for installation through HACS as a custom
 repository. Submission to the HACS default repository is in progress; until it is
@@ -168,3 +168,7 @@ Not implemented:
 - Data log service support.
 - Home Assistant Core submission.
 - Device firmware changes.
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
