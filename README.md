@@ -47,7 +47,8 @@ account**. Home Assistant talks to the Birdie cloud service, never directly to
 the device vendor's cloud, and polls every 60 seconds.
 
 Account sign-in is not final yet: the current development build asks for the
-Birdie cloud URL and an access token. See `docs/architecture.md` and
+Birdie cloud URL and an access token. The planned sign-in (OAuth with a Birdie
+sign-in page) is described in `docs/sign-in.md`. See also `docs/architecture.md` and
 `docs/bridge-api.md`.
 
 For a local demo without any real cloud, run `tools/mock_cloud.py`: it starts

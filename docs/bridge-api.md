@@ -15,8 +15,8 @@ backend (the reference bridge in `bridge/`, or Birdie's own backend) and the
 cloud platform behind it can change without a client update. Translating
 between Tuya DPs and this API is the server's job.
 
-Sections marked **TBD** depend on how the Birdie app signs users in (Firebase
-Auth or Tuya's user pool); this is being confirmed with Birdie.
+Sign-in (section 2) is designed in `sign-in.md` on the assumption that the
+Birdie app uses Firebase Authentication; this is being confirmed with Birdie.
 
 ## 1. Conventions
 
@@ -32,7 +32,7 @@ Auth or Tuya's user pool); this is being confirmed with Birdie.
 
 ## 2. Authentication
 
-Every endpoint except `GET /v1/health` requires:
+Every `/v1` endpoint except `GET /v1/health` requires:
 
 ```
 Authorization: Bearer <access_token>
@@ -41,31 +41,89 @@ Authorization: Bearer <access_token>
 The bridge resolves the token to exactly one Birdie user and, through that
 user, to their Tuya user. All device access is limited to that user's devices.
 
-### 2.1 Token issuance (TBD)
+### 2.1 Sign-in: OAuth 2.0 authorization code with PKCE
 
-To be specified once Birdie confirms its sign-in system. Requirements for any
-variant:
+Home Assistant obtains tokens with the OAuth 2.0 authorization code grant
+(RFC 6749) and PKCE (RFC 7636). The user signs in on a Birdie page served by
+the bridge, with the same methods as in the Birdie app (e-mail and password,
+Google, Apple, Facebook); the password never passes through Home Assistant.
+Design, threat model and Birdie prerequisites: `sign-in.md`.
 
-* Access tokens are short-lived (at most 1 hour) and refreshable without
-  asking the user to sign in again.
-* Users who sign in with Google, Apple or Facebook (no password) must be
-  supported, so Home Assistant cannot rely on a username/password form alone.
-* The client stores only the refresh token (or equivalent) in its config
-  entry, never the user's password.
+| Parameter | Value |
+|---|---|
+| Client | Public client, `client_id` = `home-assistant`, no client secret |
+| Allowed `redirect_uri` | Exactly `https://my.home-assistant.io/redirect/oauth` |
+| PKCE | Required, `S256` only |
+| Scope | None (one implicit scope: the user's Birdie devices) |
+| Authorization code | Single use, valid 60 seconds |
+| Access token | Opaque, valid 1 hour (`expires_in` = 3600) |
+| Refresh token | Opaque, rotated on every use, expires after 90 days without use |
 
-Candidate variants:
+#### `GET /oauth/authorize`
 
-| Variant | Access token | Bridge validation |
-|---|---|---|
-| Firebase Auth | Firebase ID token | Verify signature with Google's public keys, check `aud`/`iss` = Birdie's Firebase project, map Firebase UID to Tuya UID |
-| Tuya user pool | Bridge-issued token after a Tuya-backed sign-in | Bridge session store keyed to the Tuya UID |
+Query: `response_type=code`, `client_id`, `redirect_uri`, `state`,
+`code_challenge`, `code_challenge_method=S256`.
+
+* Unknown `client_id` or a `redirect_uri` that is not allowed: an error page,
+  **no redirect** (prevents sending codes to attacker-controlled URLs).
+* Other invalid parameters: redirect to `redirect_uri` with
+  `error=invalid_request` and the unchanged `state`.
+* Otherwise: the sign-in page. After sign-in and consent, a `302` to
+  `redirect_uri?code=<code>&state=<state>`. If the user cancels:
+  `error=access_denied`. `state` is returned unchanged.
+
+#### `POST /oauth/token`
+
+Form-encoded (`application/x-www-form-urlencoded`), as Home Assistant sends it.
+
+| Grant | Fields |
+|---|---|
+| Authorization code | `grant_type=authorization_code`, `code`, `redirect_uri`, `client_id`, `code_verifier` |
+| Refresh | `grant_type=refresh_token`, `refresh_token`, `client_id` |
+
+Response `200` (with `Cache-Control: no-store`):
+
+```json
+{
+  "access_token": "bat_...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "brt_..."
+}
+```
+
+Errors use the RFC 6749 body `{"error": "...", "error_description": "..."}`:
+
+| HTTP | `error` | When | Home Assistant reaction |
+|---|---|---|---|
+| 400 | `invalid_grant` | Code invalid, expired, reused or PKCE mismatch; refresh token invalid, expired, revoked; user disabled, deleted or signed out everywhere (e.g. password change) | Re-authentication |
+| 400 | `invalid_request` / `unsupported_grant_type` | Malformed request | Re-authentication (bug) |
+| 401 | `invalid_client` | Unknown `client_id` | Re-authentication (bug) |
+| 429 | - | Too many token requests | Retry later |
+| 503 | - | Identity provider or storage unavailable | Retry later |
+
+Home Assistant treats **every 4xx from the token endpoint as "sign in
+again"** and 429/5xx as transient. The bridge therefore must never answer a
+temporary problem with a 4xx.
+
+#### `POST /oauth/revoke`
+
+RFC 7009. Form fields `token` (a refresh or access token) and `client_id`.
+Always `200`. Revokes the whole grant (all tokens issued from one sign-in).
+Called by Home Assistant when the user deletes the config entry.
+
+#### Access token errors on `/v1`
+
+`401 unauthorized` on a `/v1` endpoint means the access token expired or was
+revoked; the client refreshes once and retries (section 5).
 
 ### 2.2 Development tokens
 
 For local development and remote debugging only, the bridge can be started
 with a static token map (environment variable, never committed), e.g.
 `BRIDGE_DEV_TOKENS=<token>=<tuya_uid>`. Development tokens must be disabled
-in any deployed environment.
+in any deployed environment. Home Assistant offers the token step only in
+advanced mode once OAuth sign-in exists.
 
 ## 3. Resources
 
@@ -326,9 +384,11 @@ implementing the API only has to meet the same guarantees.
 
 ## 8. Open items
 
-1. Token issuance and refresh (section 2.1): depends on Birdie's answer.
+1. Confirm the Birdie app uses Firebase Authentication and which providers
+   (section 2.1, `sign-in.md` section 8).
 2. Where the Birdie user to Tuya UID mapping lives (Birdie backend, or derived
    from Tuya UID login).
-3. Deployment target (Firebase Cloud Functions or Cloud Run) and region.
+3. Deployment target (Cloud Run in Birdie's Google Cloud project assumed),
+   region and public host name for the sign-in page.
 4. Final product name for `model_name` ("Pedestal" in the Tuya console,
    "Podium" in public material).

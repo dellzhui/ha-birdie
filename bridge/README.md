@@ -19,7 +19,7 @@ See `../docs/architecture.md` for the reasoning.
 | Developer CLI (`birdie-tuya`) | Implemented |
 | HTTP API (`birdie_bridge.app`, docs/bridge-api.md) | Implemented: Birdie-domain API (opaque device ids, state objects, named commands), ownership scoping, product allow-list, Tuya translation per model, status/spec caching, per-account rate limit, Tuya error mapping |
 | Development authentication (static tokens) | Implemented, development mode only |
-| Production authentication | Not started - depends on how the Birdie app signs users in |
+| Production authentication | Designed (OAuth 2.0 + PKCE, `../docs/sign-in.md`); not implemented |
 
 Nothing here has been run against a real Birdie Pedestal yet.
 
