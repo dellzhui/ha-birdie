@@ -63,8 +63,9 @@ Then in Home Assistant add **Birdie > Birdie account** with URL
 refused unless `BRIDGE_ENV=development`; there is no production
 authenticator yet, so the bridge cannot be deployed for real users.
 
-The Tuya UID of a test user can be found with `birdie-tuya device <id>` on
-one of their devices (field `uid`) or in the Tuya console.
+The Tuya UID of a test user is shown in the Tuya console on the cloud
+project's linked app account (Devices > Link App Account). Verify it with
+`birdie-tuya user-devices <uid>`.
 
 ## Developer CLI
 
