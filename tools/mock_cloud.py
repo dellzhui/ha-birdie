@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import sys
 from pathlib import Path
 
@@ -65,10 +66,8 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--tuya-port", type=int, default=8081)
     args = parser.parse_args()
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run(args.host, args.port, args.tuya_port))
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":
