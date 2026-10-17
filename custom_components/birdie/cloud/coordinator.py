@@ -184,8 +184,10 @@ class BirdieCloudCoordinator(DataUpdateCoordinator[dict[str, CloudDevice]]):
         )
 
     async def _async_delayed_refresh(self, _now: Any) -> None:
+        # Refresh directly: the request-refresh debouncer would otherwise delay
+        # the confirmation by its cooldown after a preceding refresh.
         self._unsub_refresh = None
-        await self.async_request_refresh()
+        await self.async_refresh()
 
     async def async_shutdown(self) -> None:
         """Cancel a pending post-command refresh."""

@@ -50,6 +50,10 @@ Account sign-in is not final yet: the current development build asks for the
 Birdie cloud URL and an access token. See `docs/architecture.md` and
 `docs/bridge-api.md`.
 
+For a local demo without any real cloud, run `tools/mock_cloud.py`: it starts
+a fake Tuya cloud with one synthetic Pedestal and the bridge in front of it
+(URL `http://127.0.0.1:8080`, token `demo-token`).
+
 Birdie Pedestal entities:
 
 | Entity | Platform | Unit | Notes |
@@ -66,6 +70,12 @@ Birdie Pedestal entities:
 
 The meaning of the filter replacement and filter cover values has not been
 confirmed on a real device yet.
+
+## Requirements
+
+Home Assistant 2026.3.0 or newer (needed for the bundled brand images; the
+Birdie account support was verified on 2026.9.2 and with the 2026.10 test
+framework).
 
 ## Installation
 

@@ -12,7 +12,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
     UnitOfTemperature,
 )
@@ -20,6 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
+from .compat import PARTS_PER_MILLION
 from .const import UNKNOWN_STATE, is_cloud_entry_data
 from .coordinator import BirdieConfigEntry, BirdieCoordinator
 from .entity import BirdieEntity
@@ -38,7 +38,7 @@ SENSORS: tuple[BirdieSensorEntityDescription, ...] = (
         key="co2",
         name="CO2",
         device_class=SensorDeviceClass.CO2,
-        native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+        native_unit_of_measurement=PARTS_PER_MILLION,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_fn=lambda data: data.co2_ppm,

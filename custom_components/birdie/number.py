@@ -11,13 +11,13 @@ from homeassistant.components.number import (
     NumberMode,
 )
 from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_MILLION,
     EntityCategory,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .compat import PARTS_PER_MILLION
 from .coordinator import BirdieConfigEntry, BirdieCoordinator
 from .entity import BirdieEntity
 from .models import BirdieData
@@ -35,7 +35,7 @@ NUMBERS: tuple[BirdieNumberEntityDescription, ...] = (
     BirdieNumberEntityDescription(
         key="co2_threshold",
         name="CO2 threshold",
-        native_unit_of_measurement=CONCENTRATION_PARTS_PER_MILLION,
+        native_unit_of_measurement=PARTS_PER_MILLION,
         native_min_value=400,
         native_max_value=5000,
         native_step=1,

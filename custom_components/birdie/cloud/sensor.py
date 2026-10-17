@@ -11,11 +11,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfDensity, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
+from ..compat import MICROGRAMS_PER_CUBIC_METER
 from .coordinator import BirdieCloudConfigEntry, BirdieCloudCoordinator
 from .entity import BirdieCloudEntity, async_add_device_entities
 from .pedestal import AIR_QUALITY_LEVELS, DEVICE_STATUSES, PedestalState
@@ -37,7 +38,7 @@ PEDESTAL_SENSORS: tuple[BirdieCloudSensorEntityDescription, ...] = (
     BirdieCloudSensorEntityDescription(
         key="pm25",
         device_class=SensorDeviceClass.PM25,
-        native_unit_of_measurement=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
+        native_unit_of_measurement=MICROGRAMS_PER_CUBIC_METER,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda state: state.pm25,
     ),
