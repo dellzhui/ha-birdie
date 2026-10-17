@@ -1,0 +1,5 @@
+.env*
+!.env.example
+tests/
+**/__pycache__/
+*.egg-info/

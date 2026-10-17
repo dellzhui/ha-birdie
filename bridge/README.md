@@ -67,6 +67,18 @@ The Tuya UID of a test user is shown in the Tuya console on the cloud
 project's linked app account (Devices > Link App Account). Verify it with
 `birdie-tuya user-devices <uid>`.
 
+## Container image
+
+`bridge/Dockerfile` builds a small image suitable for Google Cloud Run or any
+container host. It listens on `$PORT` (default 8080) and reads all
+configuration from environment variables; inject `TUYA_ACCESS_SECRET` from
+the platform's secret manager. Without a production authenticator the
+container refuses to start outside development mode.
+
+```bash
+docker build -t birdie-bridge bridge/
+```
+
 ## Developer CLI
 
 Credentials are read from environment variables only. Keep them in a
