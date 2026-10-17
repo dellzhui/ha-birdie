@@ -139,6 +139,9 @@ docs/                            Architecture notes
 tests/                           Integration-side tests
 ```
 
+The HTTP contract between the integration and the bridge is specified in
+`bridge-api.md`.
+
 Before pushing `bridge/` to the public repository, confirm with Birdie that
 publishing it is acceptable; otherwise move it to a private repository.
 
