@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
@@ -15,8 +16,10 @@ from homeassistant.components.bluetooth import (
     async_discovered_service_info,
     async_register_callback,
 )
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS
+from homeassistant.data_entry_flow import section
+from homeassistant.helpers import config_entry_oauth2_flow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     TextSelector,
@@ -32,16 +35,20 @@ from .cloud.bridge import (
     BridgeError,
     StaticTokenProvider,
 )
+from .cloud.oauth import CONF_TOKEN, async_register_bridge_implementation, is_oauth_entry_data
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_ACCOUNT_ID,
     CONF_BRIDGE_URL,
     CONF_ENTRY_TYPE,
     CONF_NAME,
+    DEFAULT_BRIDGE_URL,
     DOMAIN,
     ENTRY_TYPE_CLOUD,
     ENVIRONMENTAL_SERVICE_UUID,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 DISCOVERY_TIMEOUT = 10
 
@@ -55,14 +62,22 @@ USER_SCHEMA = vol.Schema(
 
 TOKEN_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
+TOKEN_SCHEMA = vol.Schema({vol.Required(CONF_ACCESS_TOKEN): TOKEN_SELECTOR})
+SECTION_ADVANCED = "advanced"
 CLOUD_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_BRIDGE_URL): str,
-        vol.Required(CONF_ACCESS_TOKEN): TOKEN_SELECTOR,
+        vol.Required(SECTION_ADVANCED): section(
+            vol.Schema(
+                {
+                    vol.Optional(CONF_BRIDGE_URL): str,
+                    vol.Optional(CONF_ACCESS_TOKEN): TOKEN_SELECTOR,
+                }
+            ),
+            # Expanded while there is no production cloud to default to.
+            {"collapsed": DEFAULT_BRIDGE_URL is not None},
+        )
     }
 )
-
-REAUTH_SCHEMA = vol.Schema({vol.Required(CONF_ACCESS_TOKEN): TOKEN_SELECTOR})
 
 
 def _normalize_bridge_url(value: str) -> str | None:
@@ -84,17 +99,30 @@ def _is_supported(discovery_info: BluetoothServiceInfoBleak) -> bool:
     return is_birdie_advertisement(discovery_info.name, discovery_info.service_uuids)
 
 
-class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Birdie."""
+class BirdieConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, domain=DOMAIN):
+    """Handle a config flow for Birdie: Bluetooth devices and Birdie accounts.
 
+    The OAuth base class provides the Birdie account sign-in steps
+    (pick_implementation, auth, creation); this class keeps its own
+    Bluetooth discovery step instead of the base class's OAuth discovery.
+    """
+
+    DOMAIN = DOMAIN
     VERSION = 1
 
     def __init__(self) -> None:
         """Initialize flow state."""
+        super().__init__()
+        self._bridge_url: str | None = None
         self._discovery_info: BluetoothServiceInfoBleak | None = None
         self._discovered_devices: dict[str, str] = {}
         self._scan_complete = False
         self._scan_task: asyncio.Task[None] | None = None
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Logger used by the OAuth base class."""
+        return _LOGGER
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -133,15 +161,11 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": title},
         )
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Let the user choose between a Bluetooth device and a Birdie account."""
         return self.async_show_menu(step_id="user", menu_options=["ble", "cloud"])
 
-    async def async_step_ble(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_ble(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle manual setup of a Bluetooth device."""
         if user_input is not None:
             address = normalize_address(user_input[CONF_ADDRESS])
@@ -179,76 +203,114 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"manual": "true"},
         )
 
-    async def async_step_cloud(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_cloud(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Add a Birdie account (cloud-connected devices such as Birdie Pedestal).
 
-        Uses a bridge URL and access token until Birdie's sign-in flow is final.
+        Submitting opens the Birdie sign-in page. The collapsed advanced
+        section takes another cloud address and, for development bridges, a
+        static development token instead of signing in.
         """
         errors: dict[str, str] = {}
         if user_input is not None:
-            url = _normalize_bridge_url(user_input[CONF_BRIDGE_URL])
-            token = user_input[CONF_ACCESS_TOKEN].strip()
+            advanced = user_input.get(SECTION_ADVANCED) or {}
+            url = _normalize_bridge_url(advanced.get(CONF_BRIDGE_URL) or DEFAULT_BRIDGE_URL or "")
+            token = (advanced.get(CONF_ACCESS_TOKEN) or "").strip()
             if url is None:
-                errors[CONF_BRIDGE_URL] = "invalid_url"
-            else:
+                errors["base"] = "invalid_url"
+            elif token:
                 account, error = await self._async_validate_cloud(url, token)
                 if account is not None:
-                    await self.async_set_unique_id(f"cloud_{account.id}")
-                    self._abort_if_unique_id_configured()
-                    return self.async_create_entry(
-                        title=account.display_name or "Birdie account",
-                        data={
-                            CONF_ENTRY_TYPE: ENTRY_TYPE_CLOUD,
-                            CONF_BRIDGE_URL: url,
-                            CONF_ACCESS_TOKEN: token,
-                            CONF_ACCOUNT_ID: account.id,
-                        },
-                    )
+                    self._bridge_url = url
+                    return await self._async_finish_cloud(account, {CONF_ACCESS_TOKEN: token})
                 errors["base"] = error
-
+            else:
+                self._bridge_url = url
+                return await self.async_step_cloud_oauth()
         return self.async_show_form(
             step_id="cloud",
             data_schema=self.add_suggested_values_to_schema(CLOUD_SCHEMA, user_input),
             errors=errors,
         )
 
-    async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
+    async def async_step_cloud_oauth(
+        self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle a rejected Birdie account token."""
+        """Open the Birdie sign-in page for the selected cloud."""
+        assert self._bridge_url is not None
+        key = async_register_bridge_implementation(self.hass, self._bridge_url)
+        return await self.async_step_pick_implementation({"implementation": key})
+
+    async def async_oauth_create_entry(self, data: dict[str, Any]) -> ConfigFlowResult:
+        """Identify the signed-in account, then create or update the entry."""
+        assert self._bridge_url is not None
+        account, error = await self._async_validate_cloud(
+            self._bridge_url, data[CONF_TOKEN]["access_token"]
+        )
+        if account is None:
+            return self.async_abort(reason=error)
+        return await self._async_finish_cloud(account, data)
+
+    async def _async_finish_cloud(
+        self, account: BridgeAccount, auth_data: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Create the entry, or update it when re-authenticating."""
+        if self.source == SOURCE_REAUTH:
+            entry = self._get_reauth_entry()
+            if account.id != entry.data.get(CONF_ACCOUNT_ID):
+                return self.async_abort(reason="wrong_account")
+            return self.async_update_reload_and_abort(entry, data_updates=auth_data)
+        await self.async_set_unique_id(f"cloud_{account.id}")
+        self._abort_if_unique_id_configured()
+        assert self._bridge_url is not None
+        return self.async_create_entry(
+            title=account.display_name or "Birdie account",
+            data={
+                CONF_ENTRY_TYPE: ENTRY_TYPE_CLOUD,
+                CONF_BRIDGE_URL: self._bridge_url,
+                CONF_ACCOUNT_ID: account.id,
+                **auth_data,
+            },
+        )
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
+        """Handle an expired Birdie sign-in or a rejected development token."""
+        self._bridge_url = entry_data[CONF_BRIDGE_URL]
+        if is_oauth_entry_data(entry_data):
+            return await self.async_step_reauth_oauth()
         return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_oauth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm, then sign in to the same Birdie account again."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id="reauth_oauth",
+                description_placeholders={"account": self._get_reauth_entry().title},
+            )
+        return await self.async_step_cloud_oauth()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for a new access token for the same Birdie account."""
+        """Ask for a new development token for the same Birdie account."""
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
             token = user_input[CONF_ACCESS_TOKEN].strip()
-            account, error = await self._async_validate_cloud(
-                entry.data[CONF_BRIDGE_URL], token
-            )
+            account, error = await self._async_validate_cloud(entry.data[CONF_BRIDGE_URL], token)
             if account is not None:
-                if account.id != entry.data.get(CONF_ACCOUNT_ID):
-                    return self.async_abort(reason="wrong_account")
-                return self.async_update_reload_and_abort(
-                    entry, data_updates={CONF_ACCESS_TOKEN: token}
-                )
+                return await self._async_finish_cloud(account, {CONF_ACCESS_TOKEN: token})
             errors["base"] = error
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=REAUTH_SCHEMA,
+            data_schema=TOKEN_SCHEMA,
             errors=errors,
             description_placeholders={"account": entry.title},
         )
 
-    async def _async_validate_cloud(
-        self, url: str, token: str
-    ) -> tuple[BridgeAccount | None, str]:
+    async def _async_validate_cloud(self, url: str, token: str) -> tuple[BridgeAccount | None, str]:
         """Check the bridge URL and token; return the account or an error key."""
         client = BirdieBridgeClient(
             async_get_clientsession(self.hass), url, StaticTokenProvider(token)
@@ -262,14 +324,10 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             return None, "cannot_connect"
         return account, ""
 
-    async def async_step_scan(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_scan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Scan briefly for Birdie Bluetooth advertisements."""
         if self._scan_task is None:
-            self._scan_task = self.hass.async_create_task(
-                self._async_scan_for_devices()
-            )
+            self._scan_task = self.hass.async_create_task(self._async_scan_for_devices())
 
         if not self._scan_task.done():
             return self.async_show_progress(
@@ -359,9 +417,7 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
     def _async_collect_cached_discoveries(self, current_ids: set[str]) -> None:
         """Collect Birdie candidates already cached by Home Assistant Bluetooth."""
         for connectable in (True, False):
-            for discovery_info in async_discovered_service_info(
-                self.hass, connectable=connectable
-            ):
+            for discovery_info in async_discovered_service_info(self.hass, connectable=connectable):
                 self._async_add_discovery(discovery_info, current_ids)
 
     def _async_add_discovery(

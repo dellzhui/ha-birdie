@@ -4,11 +4,23 @@
       "already_configured": "This Birdie device or account is already configured.",
       "not_supported": "The discovered Bluetooth device is not a supported Birdie device.",
       "reauth_successful": "Re-authentication was successful.",
-      "wrong_account": "The new access token belongs to a different Birdie account."
+      "wrong_account": "You signed in to a different Birdie account.",
+      "invalid_auth": "The Birdie cloud rejected the sign-in.",
+      "cannot_connect": "Unable to reach the Birdie cloud service.",
+      "missing_configuration": "Birdie account sign-in is not configured.",
+      "authorize_url_timeout": "Timeout generating the sign-in link.",
+      "no_url_available": "No Home Assistant URL is available. Check your network settings.",
+      "oauth_error": "The Birdie cloud returned invalid sign-in data.",
+      "oauth_failed": "Error while getting the access token from the Birdie cloud.",
+      "oauth_timeout": "Timeout while getting the access token from the Birdie cloud.",
+      "oauth_unauthorized": "The Birdie cloud rejected the sign-in.",
+      "oauth_implementation_unavailable": "Birdie account sign-in is temporarily unavailable.",
+      "missing_credentials": "Birdie account sign-in is not configured.",
+      "user_rejected_authorize": "Sign-in was cancelled: {error}"
     },
     "error": {
       "no_devices_found": "No Birdie devices were discovered. You can still add one manually by entering its Bluetooth address.",
-      "invalid_url": "Enter a valid http:// or https:// URL.",
+      "invalid_url": "Enter a valid http:// or https:// Birdie cloud URL.",
       "invalid_auth": "The access token was rejected.",
       "cannot_connect": "Unable to reach the Birdie cloud service."
     },
@@ -38,18 +50,31 @@
       },
       "cloud": {
         "title": "Add Birdie account",
-        "description": "Connect the Wi-Fi Birdie devices of your Birdie account.",
-        "data": {
-          "bridge_url": "Birdie cloud URL",
-          "access_token": "Access token"
+        "description": "Submit to open the Birdie sign-in page and sign in with your Birdie account.",
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "Only needed for development: another Birdie cloud address, or a development token instead of signing in.",
+            "data": {
+              "bridge_url": "Birdie cloud URL",
+              "access_token": "Development token"
+            }
+          }
         }
       },
       "reauth_confirm": {
         "title": "Re-authenticate Birdie account",
-        "description": "The access token for {account} is no longer valid. Enter a new one.",
+        "description": "The development token for {account} is no longer valid. Enter a new one.",
         "data": {
           "access_token": "Access token"
         }
+      },
+      "reauth_oauth": {
+        "title": "Sign in to Birdie again",
+        "description": "The sign-in for {account} has expired or was revoked. Sign in again to keep your Birdie devices connected."
+      },
+      "pick_implementation": {
+        "title": "Pick an authentication method"
       }
     }
   },

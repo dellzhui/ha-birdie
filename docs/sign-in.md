@@ -1,6 +1,15 @@
 # Signing in to a Birdie Account from Home Assistant
 
-Status: **design**, not implemented. Last updated 2026-10-17.
+Status: **implemented with a development identity provider**. Last updated
+2026-10-17.
+
+| Part | State |
+|---|---|
+| OAuth server, sign-in page, token rotation and revocation (`bridge/birdie_bridge/oauth/`) | Implemented and tested; in-memory store |
+| Home Assistant OAuth flow, token refresh, re-authentication, revoke on removal | Implemented and tested; verified in Home Assistant 2026.9.2 against `tools/mock_cloud.py` |
+| Development identity provider (e-mail/password from `BRIDGE_DEV_USERS`) | Implemented, development mode only |
+| Firebase identity provider (section 5.2) | Not started; waits for Birdie to confirm A1/A2 |
+| Shared token store (Firestore) for several bridge instances | Not started; waits for the hosting decision |
 
 How a Home Assistant user connects their Birdie account to the integration.
 The wire protocol is specified in `bridge-api.md` section 2.1; this document
@@ -193,7 +202,7 @@ So:
   `my` integration is not loaded, because the bridge accepts only that URI.
 * **Config flow:** the existing `BirdieConfigFlow` (Bluetooth steps included)
   becomes a subclass of `AbstractOAuth2FlowHandler`; the menu option
-  "Birdie account" starts the OAuth steps. `async_oauth_create_entry` calls
+  "Birdie account" shows one form, and submitting it starts the OAuth steps. `async_oauth_create_entry` calls
   `GET /v1/account`, sets the unique id and handles re-authentication.
 * **Entry data:** `entry_type: cloud`, `auth_implementation`, `token`
   (access token, refresh token, `expires_at`), `account_id`. Diagnostics
@@ -206,11 +215,14 @@ So:
   (re-authentication); 429/5xx/network -> `UpdateFailed` or
   `ConfigEntryNotReady`. Since about HA 2026.8 the helper raises
   `OAuth2TokenRequestReauthError` for this; HA 2026.1 raises a plain
-  `aiohttp.ClientResponseError`. A compat shim handles both, as for the
-  units in `compat.py`.
+  `aiohttp.ClientResponseError`. Both are `ClientResponseError`s, so the
+  token provider maps by HTTP status and works on either.
 * **Removal:** `async_remove_entry` calls `POST /oauth/revoke` (best effort).
-* **Development tokens:** the current bridge URL + token step stays, shown
-  only in Home Assistant's advanced mode.
+* **Other clouds and development tokens:** a collapsed "Advanced" section
+  of the Birdie account form takes another cloud URL and, for development
+  bridges, a static token instead of signing in (Home Assistant deprecates
+  advanced-mode-only steps). It is expanded while `DEFAULT_BRIDGE_URL` is
+  unset.
 * No migration is needed: Birdie account entries have not been released.
 
 ## 7. Threats and mitigations

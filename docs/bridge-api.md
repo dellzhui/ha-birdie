@@ -122,8 +122,13 @@ revoked; the client refreshes once and retries (section 5).
 For local development and remote debugging only, the bridge can be started
 with a static token map (environment variable, never committed), e.g.
 `BRIDGE_DEV_TOKENS=<token>=<tuya_uid>`. Development tokens must be disabled
-in any deployed environment. Home Assistant offers the token step only in
-advanced mode once OAuth sign-in exists.
+in any deployed environment. Home Assistant accepts a development token in
+the collapsed "Advanced" section of the Birdie account form.
+
+The development bridge can also run the OAuth flow with configured test
+users instead of Birdie's identity provider
+(`BRIDGE_DEV_USERS=<email>:<password>=<tuya_uid>`); the sign-in page then
+shows a development banner.
 
 ## 3. Resources
 

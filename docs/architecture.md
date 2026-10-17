@@ -8,7 +8,7 @@ Status: option B (Birdie cloud bridge) selected; option A3 dropped. Last reviewe
 |---|---|
 | Home Assistant: Birdie account entry, Pedestal entities, diagnostics | Implemented; unit-tested and verified end to end in HA 2026.9.2 against the bridge and a fake Tuya cloud |
 | Bridge: HTTP API, scoping, caching, error mapping, container image | Implemented with development tokens |
-| Production sign-in (OAuth 2.0 + PKCE, Birdie sign-in page) | Designed in `sign-in.md`; waiting for Birdie to confirm Firebase and the Tuya UID mapping |
+| Sign-in (OAuth 2.0 + PKCE, Birdie sign-in page) | Implemented end to end with a development identity provider (`sign-in.md`); Firebase provider and shared token store wait for Birdie |
 | Real device validation | Waiting for Birdie: cloud project access, see `remote-testing.md` |
 | Deployment of the bridge | Waiting for Birdie: hosting decision |
 

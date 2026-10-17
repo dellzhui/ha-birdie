@@ -19,7 +19,8 @@ See `../docs/architecture.md` for the reasoning.
 | Developer CLI (`birdie-tuya`) | Implemented |
 | HTTP API (`birdie_bridge.app`, docs/bridge-api.md) | Implemented: Birdie-domain API (opaque device ids, state objects, named commands), ownership scoping, product allow-list, Tuya translation per model, status/spec caching, per-account rate limit, Tuya error mapping |
 | Development authentication (static tokens) | Implemented, development mode only |
-| Production authentication | Designed (OAuth 2.0 + PKCE, `../docs/sign-in.md`); not implemented |
+| OAuth 2.0 + PKCE sign-in (`birdie_bridge.oauth`, `../docs/sign-in.md`) | Implemented with a development identity provider and in-memory token store |
+| Production identity provider (Firebase) and shared token store | Not started - waiting for Birdie |
 
 Nothing here has been run against a real Birdie Pedestal yet.
 
@@ -55,15 +56,19 @@ cd bridge && ../.venv/bin/pytest
 ```bash
 set -a; . bridge/.env.local; set +a          # TUYA_* credentials
 export BRIDGE_ENV=development
-export BRIDGE_DEV_TOKENS='<pick-a-random-token>=<tuya_uid_of_test_user>'
+export BRIDGE_DEV_USERS='<email>:<password>=<tuya_uid_of_test_user>'   # OAuth sign-in
+export BRIDGE_DEV_TOKENS='<pick-a-random-token>=<tuya_uid_of_test_user>'  # and/or static token
 export BRIDGE_EXTRA_PRODUCTS='<clone_pid>=pedestal'   # only for a cloned test product
 .venv/bin/python -m birdie_bridge            # listens on 127.0.0.1:8080
 ```
 
-Then in Home Assistant add **Birdie > Birdie account** with URL
-`http://<host>:8080` and the development token. Development tokens are
-refused unless `BRIDGE_ENV=development`; there is no production
-authenticator yet, so the bridge cannot be deployed for real users.
+Then in Home Assistant add **Birdie > Birdie account**, open **Advanced**
+and enter `http://<host>:8080`. Leave the token empty to sign in on the
+development sign-in page (redirects through my.home-assistant.io, so My Home
+Assistant must point at your instance), or enter a development token.
+Development users and tokens are refused unless `BRIDGE_ENV=development`;
+there is no production identity provider yet, so the bridge cannot be
+deployed for real users.
 
 The Tuya UID of a test user is shown in the Tuya console on the cloud
 project's linked app account (Devices > Link App Account). Verify it with

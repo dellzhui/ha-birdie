@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import CONF_ACCESS_TOKEN, is_cloud_entry_data
 
-TO_REDACT = {CONF_ACCESS_TOKEN, CONF_ADDRESS}
+TO_REDACT = {CONF_ACCESS_TOKEN, CONF_ADDRESS, "token"}
 
 
 async def async_get_config_entry_diagnostics(

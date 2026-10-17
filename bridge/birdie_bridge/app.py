@@ -14,6 +14,7 @@ from typing import Any
 from aiohttp import web
 
 from .auth import AuthenticationError, Authenticator, Principal
+from .oauth import OAuthServer, setup_oauth_routes
 from .service import BridgeHttpError, BridgeService
 
 _LOGGER = logging.getLogger(__name__)
@@ -147,12 +148,22 @@ def create_app(
     rate_limit: int = 60,
     rate_window: float = 60.0,
     clock: Callable[[], float] = time.monotonic,
+    oauth: OAuthServer | None = None,
+    oauth_rate_limit: int = 30,
+    trusted_proxy_hops: int = 0,
 ) -> web.Application:
-    """Build the bridge web application."""
+    """Build the bridge web application.
+
+    ``authenticator`` resolves ``/v1`` bearer tokens; with ``oauth`` the OAuth
+    endpoints and sign-in page are served too (rate limited per client IP).
+    """
     app = web.Application(middlewares=[_envelope_middleware], client_max_size=64 * 1024)
     app[SERVICE_KEY] = service
     app[AUTH_KEY] = authenticator
     app[LIMITER_KEY] = RateLimiter(rate_limit, rate_window, clock)
+    if oauth is not None:
+        ip_limiter = RateLimiter(oauth_rate_limit, rate_window, clock)
+        setup_oauth_routes(app, oauth, ip_limiter.check, trusted_proxy_hops=trusted_proxy_hops)
     app.router.add_get("/v1/health", _health)
     app.router.add_get("/v1/account", _account)
     app.router.add_get("/v1/devices", _devices)

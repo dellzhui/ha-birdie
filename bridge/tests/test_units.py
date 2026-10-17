@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from birdie_bridge.__main__ import build_authenticator, build_catalog
+from birdie_bridge.__main__ import build_auth, build_catalog
 from birdie_bridge.auth import (
     AuthenticationError,
     DevTokenAuthenticator,
@@ -55,15 +55,22 @@ def test_parse_product_map() -> None:
         parse_product_map("p1")
 
 
-def test_authenticator_selection() -> None:
-    dev = build_authenticator({"BRIDGE_ENV": "development", "BRIDGE_DEV_TOKENS": "t=u"})
-    assert isinstance(dev, DevTokenAuthenticator)
+async def test_auth_selection() -> None:
+    dev = build_auth({"BRIDGE_ENV": "development", "BRIDGE_DEV_TOKENS": "t=u"})
+    assert dev.oauth is None
+    assert (await dev.authenticator.authenticate("t")).tuya_uid == "u"
+    with_users = build_auth(
+        {"BRIDGE_ENV": "development", "BRIDGE_DEV_USERS": "a@example.com:pw=u1"}
+    )
+    assert with_users.oauth is not None
     with pytest.raises(SystemExit):
-        build_authenticator({"BRIDGE_ENV": "development"})
+        build_auth({"BRIDGE_ENV": "development"})
     with pytest.raises(SystemExit):
-        build_authenticator({"BRIDGE_DEV_TOKENS": "t=u"})  # production refuses dev tokens
+        build_auth({"BRIDGE_DEV_TOKENS": "t=u"})  # production refuses dev tokens
     with pytest.raises(SystemExit):
-        build_authenticator({})  # no production authenticator yet
+        build_auth({"BRIDGE_DEV_USERS": "a@example.com:pw=u1"})
+    with pytest.raises(SystemExit):
+        build_auth({})  # no production identity provider yet
 
 
 def test_build_catalog_with_extra_products() -> None:

@@ -92,3 +92,11 @@ async def async_remove_config_entry_device(hass: Any, entry: Any, device_entry: 
         domain == DOMAIN and identifier in current
         for domain, identifier in device_entry.identifiers
     )
+
+
+async def async_remove_entry(hass: Any, entry: Any) -> None:
+    """Revoke the Birdie sign-in when a cloud account entry is deleted."""
+    if is_cloud_entry_data(entry.data):
+        from .cloud.oauth import async_revoke
+
+        await async_revoke(hass, entry)

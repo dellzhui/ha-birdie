@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -50,14 +51,32 @@ def cloud_entry_data(token: str = TOKEN) -> dict[str, Any]:
     }
 
 
-def mock_cloud_entry(**kwargs: Any) -> Any:
+def oauth_entry_data(refresh_token: str = "brt_grant.secret1") -> dict[str, Any]:
+    from custom_components.birdie.cloud.oauth import implementation_key
+
+    return {
+        CONF_ENTRY_TYPE: ENTRY_TYPE_CLOUD,
+        CONF_BRIDGE_URL: BRIDGE_URL,
+        CONF_ACCOUNT_ID: ACCOUNT_ID,
+        "auth_implementation": implementation_key(BRIDGE_URL),
+        "token": {
+            "access_token": "bat_current",
+            "refresh_token": refresh_token,
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "expires_at": time.time() + 3600,
+        },
+    }
+
+
+def mock_cloud_entry(*, oauth: bool = False, **kwargs: Any) -> Any:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+    kwargs.setdefault("data", oauth_entry_data() if oauth else cloud_entry_data())
     return MockConfigEntry(
         domain=DOMAIN,
-        title="Birdie account",
+        title="jane@example.com",
         unique_id=f"cloud_{ACCOUNT_ID}",
-        data=cloud_entry_data(),
         **kwargs,
     )
 

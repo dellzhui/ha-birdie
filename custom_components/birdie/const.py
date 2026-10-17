@@ -22,6 +22,9 @@ CONF_BRIDGE_URL = "bridge_url"
 CONF_ACCESS_TOKEN = "access_token"
 CONF_ACCOUNT_ID = "account_id"
 
+# Production Birdie cloud (bridge) address; None until Birdie's hosting is
+# decided, so the config flow asks for it.
+DEFAULT_BRIDGE_URL: str | None = None
 
 
 def is_cloud_entry_data(data: Mapping[str, Any]) -> bool:

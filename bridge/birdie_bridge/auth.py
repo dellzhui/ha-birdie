@@ -1,16 +1,16 @@
 """Authentication of bridge callers.
 
 An ``Authenticator`` turns a bearer token into a ``Principal``: the Birdie
-account and the Tuya user whose devices it may access. The production
-authenticator depends on how the Birdie app signs users in (Firebase Auth or
-Tuya's user pool) and is not implemented yet; see docs/bridge-api.md 2.1.
+account and the Tuya user whose devices it may access. OAuth access tokens
+are authenticated by ``birdie_bridge.oauth.OAuthServer``; static development
+tokens by ``DevTokenAuthenticator`` (docs/bridge-api.md section 2).
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -36,9 +36,26 @@ class Authenticator(Protocol):
         """Return the principal for ``token`` or raise ``AuthenticationError``."""
 
 
-def account_id_for(tuya_uid: str) -> str:
-    """Opaque, stable account id that does not reveal the Tuya UID."""
-    return hashlib.sha256(f"birdie-account:{tuya_uid}".encode()).hexdigest()[:24]
+def account_id_for(subject: str) -> str:
+    """Opaque, stable account id for a user id; does not reveal the user id."""
+    return hashlib.sha256(f"birdie-account:{subject}".encode()).hexdigest()[:24]
+
+
+class ChainAuthenticator:
+    """Try several authenticators in order."""
+
+    def __init__(self, authenticators: Sequence[Authenticator]) -> None:
+        if not authenticators:
+            raise ValueError("At least one authenticator is required")
+        self._authenticators = tuple(authenticators)
+
+    async def authenticate(self, token: str) -> Principal:
+        for authenticator in self._authenticators:
+            try:
+                return await authenticator.authenticate(token)
+            except AuthenticationError:
+                continue
+        raise AuthenticationError("Unknown token")
 
 
 class DevTokenAuthenticator:

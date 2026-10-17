@@ -46,13 +46,14 @@ Wi-Fi Birdie devices are added with **Add integration > Birdie > Birdie
 account**. Home Assistant talks to the Birdie cloud service, never directly to
 the device vendor's cloud, and polls every 60 seconds.
 
-Account sign-in is not final yet: the current development build asks for the
-Birdie cloud URL and an access token. The planned sign-in (OAuth with a Birdie
-sign-in page) is described in `docs/sign-in.md`. See also `docs/architecture.md` and
-`docs/bridge-api.md`.
+Users sign in on a Birdie sign-in page (OAuth), so passwords never pass
+through Home Assistant; see `docs/sign-in.md`. Until the Birdie cloud service
+is deployed, enter its address under **Advanced** in the Birdie account form.
+See also `docs/architecture.md` and `docs/bridge-api.md`.
 
 For a local demo without any real cloud, run `tools/mock_cloud.py`: it starts
-a fake Tuya cloud with one synthetic Pedestal and the bridge in front of it
+a fake Tuya cloud with one synthetic Pedestal and the bridge in front of it,
+with a development sign-in (`demo@example.com` / `demo-password`)
 (URL `http://127.0.0.1:8080`, token `demo-token`).
 
 Birdie Pedestal entities:

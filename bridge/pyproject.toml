@@ -20,6 +20,9 @@ birdie-tuya = "birdie_bridge.devtool:main"
 [tool.setuptools.packages.find]
 include = ["birdie_bridge*"]
 
+[tool.setuptools.package-data]
+"birdie_bridge.oauth" = ["static/*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
