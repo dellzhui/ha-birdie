@@ -146,6 +146,10 @@ class BirdieCloudCoordinator(DataUpdateCoordinator[dict[str, CloudDevice]]):
         self._async_apply_optimistic(device_id, commands)
         self._async_schedule_refresh()
 
+    def cached_specification(self, device_id: str) -> DeviceSpecification | None:
+        """Return the specification if it has been fetched already."""
+        return self._specs.get(device_id)
+
     async def _async_get_specification(self, device_id: str) -> DeviceSpecification:
         """Return the cached device specification, fetching it on first use."""
         if device_id not in self._specs:

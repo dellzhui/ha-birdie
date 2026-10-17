@@ -1,0 +1,28 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "filter_replacement": {"default": "mdi:air-filter"},
+      "filter_cover": {"default": "mdi:tray-arrow-up"}
+    },
+    "button": {
+      "reset_filter": {"default": "mdi:restore"}
+    },
+    "fan": {
+      "purifier": {
+        "default": "mdi:air-purifier",
+        "state": {"off": "mdi:air-purifier-off"},
+        "state_attributes": {
+          "preset_mode": {
+            "state": {"auto": "mdi:fan-auto", "sleep": "mdi:power-sleep"}
+          }
+        }
+      }
+    },
+    "sensor": {
+      "air_quality": {"default": "mdi:air-filter"},
+      "filter_life": {"default": "mdi:air-filter"},
+      "filter_remaining": {"default": "mdi:timer-sand"},
+      "device_status": {"default": "mdi:alert-circle-outline"}
+    }
+  }
+}

@@ -81,3 +81,14 @@ async def async_unload_entry(hass: Any, entry: Any) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         bluetooth.async_rediscover_address(hass, coordinator.address)
     return unload_ok
+
+
+async def async_remove_config_entry_device(hass: Any, entry: Any, device_entry: Any) -> bool:
+    """Allow removing a cloud device that the Birdie account no longer reports."""
+    if not is_cloud_entry_data(entry.data):
+        return False
+    current = entry.runtime_data.data or {}
+    return not any(
+        domain == DOMAIN and identifier in current
+        for domain, identifier in device_entry.identifiers
+    )
