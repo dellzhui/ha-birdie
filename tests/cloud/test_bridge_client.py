@@ -23,7 +23,7 @@ from custom_components.birdie.cloud.bridge import (
     StaticTokenProvider,
 )
 
-from ..helpers import ACCOUNT_ID, DEVICE_ID, TOKEN, load_fixture, pedestal_status
+from ..helpers import ACCOUNT_ID, DEVICE_ID, TOKEN, pedestal_device
 
 # These tests run a real local HTTP server; Home Assistant's test plugin blocks
 # sockets by default.
@@ -56,26 +56,16 @@ class FakeBridgeServer:
         auth = request.headers.get("Authorization", "")
         if auth.removeprefix("Bearer ") not in self.valid_tokens:
             return self.error(401, "unauthorized")
-        device = {
-            "id": DEVICE_ID,
-            "name": "Living Room Purifier",
-            "model": "pedestal",
-            "model_name": "Birdie Pedestal",
-            "product_id": "synthpid00000001",
-            "online": True,
-        }
+        device = pedestal_device()
         path = request.path
         if path == "/v1/account":
             return web.json_response({"id": ACCOUNT_ID, "display_name": "jane@example.com"})
         if path == "/v1/devices":
-            if request.query.get("include") == "status":
-                device = device | {
-                    "status": pedestal_status(),
-                    "fetched_at": "2026-10-17T12:00:00Z",
-                }
+            if request.query.get("include") != "state":
+                del device["state"], device["fetched_at"]
             return web.json_response({"devices": [device]})
-        if path == f"/v1/devices/{DEVICE_ID}/specification":
-            return web.json_response(load_fixture("pedestal_specification.json"))
+        if path == f"/v1/devices/{DEVICE_ID}" and request.method == "GET":
+            return web.json_response(device)
         if path == f"/v1/devices/{DEVICE_ID}/commands" and request.method == "POST":
             self.commands.append(await request.json())
             return web.json_response({"accepted": True}, status=202)
@@ -109,32 +99,35 @@ async def test_account_and_devices(client: BirdieBridgeClient, bridge: FakeBridg
     assert device.id == DEVICE_ID
     assert device.model == "pedestal"
     assert device.online is True
-    assert device.status["pm25"] == 12
-    assert bridge.requests[-1][1] == "/v1/devices?include=status"
+    assert device.hardware_version == "1.0.0"
+    assert device.state["pm25"] == 12
+    assert device.state["mode"] == "auto"
+    assert bridge.requests[-1][1] == "/v1/devices?include=state"
     assert bridge.requests[-1][2]["Authorization"] == f"Bearer {TOKEN}"
 
 
-async def test_list_without_status(client: BirdieBridgeClient, bridge: FakeBridgeServer) -> None:
-    devices = await client.async_list_devices(include_status=False)
-    assert devices[0].status == {}
+async def test_list_without_state(client: BirdieBridgeClient, bridge: FakeBridgeServer) -> None:
+    devices = await client.async_list_devices(include_state=False)
+    assert devices[0].state == {}
     assert bridge.requests[-1][1] == "/v1/devices"
 
 
-async def test_specification_and_commands(
+async def test_get_device_and_commands(
     client: BirdieBridgeClient, bridge: FakeBridgeServer
 ) -> None:
-    spec = await client.async_get_specification(DEVICE_ID)
-    assert spec["category"] == "kj"
-    await client.async_send_commands(DEVICE_ID, [{"code": "switch", "value": False}])
-    assert bridge.commands == [{"commands": [{"code": "switch", "value": False}]}]
+    device = await client.async_get_device(DEVICE_ID)
+    assert device.state["filter_life_percent"] == 75
+    command = {"name": "set_power", "params": {"on": False}}
+    await client.async_send_commands(DEVICE_ID, [command])
+    assert bridge.commands == [{"commands": [command]}]
 
 
 async def test_device_id_is_path_quoted(
     client: BirdieBridgeClient, bridge: FakeBridgeServer
 ) -> None:
     with pytest.raises(BridgeDeviceNotFoundError):
-        await client.async_get_specification("../account")
-    assert bridge.requests[-1][1] == "/v1/devices/..%2Faccount/specification"
+        await client.async_get_device("../account")
+    assert bridge.requests[-1][1] == "/v1/devices/..%2Faccount"
 
 
 async def test_unauthorized(client: BirdieBridgeClient, bridge: FakeBridgeServer) -> None:

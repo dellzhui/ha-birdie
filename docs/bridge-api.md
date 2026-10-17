@@ -1,11 +1,19 @@
 # Birdie Cloud Bridge API (v1)
 
-Status: **draft**. Last updated 2026-10-17.
+Status: **draft**. Last updated 2026-10-17 (domain model: opaque device ids,
+state objects and named commands replace Tuya DP passthrough).
 
 The contract between the Birdie Home Assistant integration (client) and the
 Birdie Cloud Bridge (server). The bridge holds Birdie's Tuya Cloud project
 credentials and exposes only what one signed-in Birdie user may see and do.
 See `architecture.md` for why the bridge exists.
+
+The API describes devices in **Birdie terms only**: opaque device ids, a
+per-model state object and named commands. No Tuya identifier, data point
+(DP) code or DP value appears in it, so the API can be implemented by any
+backend (the reference bridge in `bridge/`, or Birdie's own backend) and the
+cloud platform behind it can change without a client update. Translating
+between Tuya DPs and this API is the server's job.
 
 Sections marked **TBD** depend on how the Birdie app signs users in (Firebase
 Auth or Tuya's user pool); this is being confirmed with Birdie.
@@ -18,8 +26,9 @@ Auth or Tuya's user pool); this is being confirmed with Birdie.
 * Every response carries `X-Request-ID`. A client may send its own
   `X-Request-ID`; the bridge echoes it. Include it when reporting problems.
 * Compatibility: within `v1` the bridge only makes additive changes (new
-  fields, new status codes, new models). Clients must ignore unknown fields
-  and must not fail on unknown DP codes or models.
+  fields, new enum values, new commands, new status codes, new models).
+  Clients must ignore unknown fields and models and treat unknown enum values
+  as unknown, not as errors.
 
 ## 2. Authentication
 
@@ -64,50 +73,69 @@ in any deployed environment.
 
 ```json
 {
-  "id": "bf1234567890abcdef",
+  "id": "5b0c9e7d2a4f4e1c8a3d6b90",
   "name": "Living Room Purifier",
   "model": "pedestal",
   "model_name": "Birdie Pedestal",
-  "product_id": "a2zf7q0zxcutn5dy",
-  "online": true
+  "online": true,
+  "hardware_version": "1.0.0"
 }
 ```
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | string | Tuya device id. Stable; use it as the unique id. |
-| `name` | string | Name the user gave the device in the Birdie app, else the product name. |
-| `model` | string | Birdie model key derived by the bridge from the Tuya product id. Currently only `pedestal`. |
+| `id` | string | Opaque, stable device id assigned by Birdie. Use it as the unique id; do not parse it. |
+| `name` | string | Name the user gave the device in the Birdie app, else the model name. |
+| `model` | string | Birdie model key. Currently only `pedestal`. Defines the shape of `state` and the accepted commands. |
 | `model_name` | string | Display name for the device registry. |
-| `product_id` | string | Tuya product id, informational. |
-| `online` | boolean | Whether Tuya Cloud currently sees the device as connected. |
+| `online` | boolean | Whether the device is currently connected to the cloud. |
+| `hardware_version` | string or null | Hardware version reported by the device, if known. |
 
-The bridge **never** returns Tuya `local_key`, IP address, geolocation, the
-Tuya UID or any credential.
+With `include=state` (section 4.3), a device object also has:
 
-### 3.2 Status object
+| Field | Type | Notes |
+|---|---|---|
+| `state` | object | Latest state, shaped per `model` (section 3.3). |
+| `fetched_at` | string | When the server last read the state from the device cloud. |
 
-A flat map of DP code to its latest reported value, as reported by Tuya:
+The server **never** returns cloud-platform identifiers (Tuya device, product
+or user ids), local keys, IP addresses, geolocation or credentials.
+
+### 3.2 State values
+
+Every field of a state object is always present and may be `null` when the
+device has not reported it (for example right after pairing) or reported a
+value the server does not understand. Clients treat `null` as "unknown".
+
+### 3.3 `pedestal` state
 
 ```json
 {
-  "switch": true,
+  "power": true,
+  "mode": "manual",
+  "fan_speed": 2,
   "pm25": 12,
-  "mode": "auto",
   "air_quality": "good",
-  "filter_total_minutes": 129600,
-  "filter_used_minutes": 32400,
-  "filter_status": false,
-  "reset_filter": false,
-  "filter_cover": false,
-  "hw_version": "1.0.0",
-  "device_error": "normal"
+  "filter_life_percent": 75,
+  "filter_remaining_minutes": 97200,
+  "filter_replace_needed": false,
+  "filter_cover_open": false,
+  "fault": "none"
 }
 ```
 
-Values are passed through unchanged; interpretation (units, meaning of the
-boolean DPs) belongs to the client's device model. DPs may be missing, for
-example right after pairing. Unknown DPs must be ignored by the client.
+| Field | Type | Values |
+|---|---|---|
+| `power` | boolean | Purifier running. |
+| `mode` | string | `auto`, `sleep` (device-managed) or `manual` (fixed `fan_speed`). Reported also while `power` is false. |
+| `fan_speed` | integer | 1 (lowest) to 4 (highest) when `mode` is `manual`, else `null`. |
+| `pm25` | integer | PM2.5 concentration in ug/m3 (0-500). |
+| `air_quality` | string | `good`, `moderate`, `poor`, `very_poor`. |
+| `filter_life_percent` | integer | Remaining filter life, 0-100. |
+| `filter_remaining_minutes` | integer | Remaining filter time in minutes. |
+| `filter_replace_needed` | boolean | The device asks for a filter replacement. |
+| `filter_cover_open` | boolean | The filter cover is open. |
+| `fault` | string | `none`, `fan`, `pm25_sensor`, `overcurrent`. |
 
 ## 4. Endpoints
 
@@ -140,7 +168,7 @@ Query parameters:
 
 | Name | Values | Default | Notes |
 |---|---|---|---|
-| `include` | `status` | none | Also return each device's status and `fetched_at`. |
+| `include` | `state` | none | Also return each device's `state` and `fetched_at`. |
 
 Response `200`:
 
@@ -148,74 +176,56 @@ Response `200`:
 {
   "devices": [
     {
-      "id": "bf1234567890abcdef",
+      "id": "5b0c9e7d2a4f4e1c8a3d6b90",
       "name": "Living Room Purifier",
       "model": "pedestal",
       "model_name": "Birdie Pedestal",
-      "product_id": "a2zf7q0zxcutn5dy",
       "online": true,
-      "status": { "switch": true, "pm25": 12, "mode": "auto" },
+      "hardware_version": "1.0.0",
+      "state": { "power": true, "mode": "auto", "fan_speed": null, "pm25": 12, "...": "..." },
       "fetched_at": "2026-10-17T12:00:00Z"
     }
   ]
 }
 ```
 
-`GET /v1/devices?include=status` is the **polling endpoint**: one request
+`GET /v1/devices?include=state` is the **polling endpoint**: one request
 returns everything Home Assistant needs for all of a user's devices.
 
 ### 4.4 `GET /v1/devices/{device_id}`
 
-One device with its status. Same object as an element of
-`GET /v1/devices?include=status`.
+One device with its state. Same object as an element of
+`GET /v1/devices?include=state`.
 
 Errors: `404 device_not_found` if the device does not exist **or** does not
 belong to the user (the bridge does not reveal which).
 
-### 4.5 `GET /v1/devices/{device_id}/specification`
+### 4.5 `POST /v1/devices/{device_id}/commands`
 
-The device's data point specification, used by the client to validate
-commands. Changes only with firmware/product updates; clients should cache it
-for the lifetime of the config entry.
-
-Response `200`:
+Sends one or more commands, applied together. Request:
 
 ```json
 {
-  "category": "kj",
-  "functions": [
-    { "code": "switch", "type": "Boolean", "values": {} },
-    { "code": "mode", "type": "Enum",
-      "values": { "range": ["auto", "sleep", "manual1", "manual2", "manual3", "manual4"] } },
-    { "code": "reset_filter", "type": "Boolean", "values": {} }
-  ],
-  "status": [
-    { "code": "pm25", "type": "Integer",
-      "values": { "unit": "ug/m3", "min": 0, "max": 500, "scale": 0, "step": 1 } }
+  "commands": [
+    { "name": "set_power", "params": { "on": true } },
+    { "name": "set_fan_speed", "params": { "speed": 2 } }
   ]
 }
 ```
 
-`functions` lists writable DPs, `status` lists reported DPs. `values` is a
-JSON object (the bridge decodes Tuya's JSON-in-a-string encoding). `type` uses
-Tuya's names: `Boolean`, `Integer`, `Enum`, `String`, `Json`, `Raw`, `Bitmap`.
+* 1 to 5 commands per request. `params` may be omitted when a command takes
+  none.
+* Commands of the `pedestal` model:
 
-### 4.6 `POST /v1/devices/{device_id}/commands`
-
-Sends one or more DP commands. Request:
-
-```json
-{ "commands": [ { "code": "mode", "value": "manual2" } ] }
-```
-
-* 1 to 5 commands per request.
-* Only DPs on the bridge's allow-list for the device's model are accepted:
-
-  | Model | Code | Accepted values |
+  | `name` | `params` | Effect |
   |---|---|---|
-  | `pedestal` | `switch` | `true`, `false` |
-  | `pedestal` | `mode` | values in the device's `mode` range |
-  | `pedestal` | `reset_filter` | `true` |
+  | `set_power` | `on`: boolean | Turn the purifier on or off. |
+  | `set_mode` | `mode`: `auto` or `sleep` | Select a device-managed mode. |
+  | `set_fan_speed` | `speed`: integer 1-4 | Select manual mode at that speed. |
+  | `reset_filter` | none | Reset the filter life after replacing the filter. |
+
+* Two commands that change the same setting (for example `set_mode` and
+  `set_fan_speed`) in one request are rejected.
 
 Response `202`:
 
@@ -223,10 +233,12 @@ Response `202`:
 { "accepted": true }
 ```
 
-`202` means Tuya Cloud accepted the command for delivery; it does not prove
-the device has applied it. Clients confirm by reading status afterwards.
+`202` means the device cloud accepted the command for delivery; it does not
+prove the device has applied it. Clients confirm by reading state afterwards.
 
-Errors: `404 device_not_found`, `409 device_offline`, `422 command_rejected`.
+Errors: `400 invalid_request` (malformed body), `404 device_not_found`,
+`409 device_offline`, `422 command_rejected` (unknown command, invalid
+parameter, or not supported by this device).
 
 ## 5. Errors
 
@@ -251,7 +263,7 @@ Every error uses this body:
 | 403 | `account_disabled` | The user may not use the bridge | Start re-authentication |
 | 404 | `device_not_found` | Unknown device, or not the user's | Mark device unavailable; the next device list sync removes it |
 | 409 | `device_offline` | Command sent to an offline device | Show "device offline" to the user; not a polling failure |
-| 422 | `command_rejected` | DP not allowed, value invalid, or rejected by the device | Show error; do not retry |
+| 422 | `command_rejected` | Unknown command, invalid parameter, or rejected by the device | Show error; do not retry |
 | 404 | `not_found` | Unknown endpoint | Bug or version mismatch; log |
 | 405 | `method_not_allowed` | Wrong HTTP method | Bug; log |
 | 429 | `rate_limited` | Too many requests from this user | Back off for `Retry-After` seconds |
@@ -263,21 +275,36 @@ Every error uses this body:
 
 ## 6. Client guidance (Home Assistant)
 
-* Poll `GET /v1/devices?include=status` once per config entry, default every
+* Poll `GET /v1/devices?include=state` once per config entry, default every
   60 seconds, never more often than every 30 seconds.
 * After a successful command, request one extra refresh after about 2 seconds.
-* Fetch `GET /v1/devices/{id}/specification` once per device and cache it.
+  The client may show the commanded `power`, `mode` and `fan_speed` until then.
 * Treat `online: false` as "entities unavailable", not as an error.
 
 ## 7. Server requirements (bridge)
 
+This section describes the reference bridge on Tuya Cloud; another backend
+implementing the API only has to meet the same guarantees.
+
+* **Device ids:** the reference bridge derives `id` as a truncated SHA-256 of
+  the Tuya device id, so no mapping table is needed. A backend that replaces
+  it must keep returning the same ids, or Home Assistant users lose their
+  device and entity history.
+* **Translation:** each model module (`bridge/birdie_bridge/pedestal.py`)
+  converts Tuya status to the state object and commands to Tuya DPs. The
+  meaning of `filter_replace_needed`, `filter_cover_open` and `reset_filter`
+  is still assumed from the product schema; correcting it after a real-device
+  test is a bridge-only change.
+* **Command validation:** commands are checked against the model's command
+  table and against the writable DPs Tuya reports for the device (cached for
+  an hour), so unsupported modes are rejected with `422` before reaching Tuya.
 * **Ownership:** every device-scoped request checks that the device belongs to
   the token's Tuya user. The ownership list may be cached for up to 60 seconds.
 * **Allow-lists:** only products in the bridge's product map are listed, and
-  only allow-listed commands are forwarded.
+  only the model's commands are forwarded.
 * **Secrets:** Tuya credentials come from the deployment's secret store. Tokens,
   secrets and `local_key` are never logged or returned.
-* **Quota:** status may be served from a cache of at most 10 seconds;
+* **Quota:** state may be served from a cache of at most 10 seconds;
   a successful command invalidates that device's cache. Prefer Tuya calls that
   return status for several devices at once.
 * **Rate limiting:** per user, e.g. 60 requests per minute (tunable).

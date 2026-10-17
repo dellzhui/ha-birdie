@@ -31,7 +31,7 @@ class BirdieCloudEntity(CoordinatorEntity[BirdieCloudCoordinator]):
             manufacturer="Birdie",
             model=device.info.model_name,
             name=device.info.name,
-            hw_version=device.state.hw_version,
+            hw_version=device.info.hardware_version,
         )
 
     @property

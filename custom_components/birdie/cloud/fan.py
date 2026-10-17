@@ -1,30 +1,47 @@
 """Fan entity for the Birdie Pedestal air purifier.
 
-Home Assistant models air purifiers as fans. The Pedestal's ``mode`` DP mixes
-two concepts, mapped as HA recommends:
+Home Assistant models air purifiers as fans, mapped as HA recommends:
 
-* ``manual1``..``manual4`` are fixed speeds -> percentage (25/50/75/100 %).
+* Manual mode with fan speed 1..4 -> percentage (25/50/75/100 %).
 * ``auto`` and ``sleep`` are device-managed modes -> preset modes.
 """
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.percentage import (
-    ordered_list_item_to_percentage,
-    percentage_to_ordered_list_item,
+    percentage_to_ranged_value,
+    ranged_value_to_percentage,
 )
+from homeassistant.util.scaling import int_states_in_range
 
+from ..const import DOMAIN
 from .coordinator import BirdieCloudConfigEntry, BirdieCloudCoordinator
 from .entity import BirdieCloudEntity, async_add_device_entities
-from .pedestal import MANUAL_MODES, Command, DeviceSpecification, mode_command, power_command
+from .pedestal import (
+    FAN_SPEED_MAX,
+    FAN_SPEED_MIN,
+    MODE_MANUAL,
+    PRESET_MODES,
+    Command,
+    CommandError,
+    set_fan_speed_command,
+    set_mode_command,
+    set_power_command,
+)
 
-PRESET_MODES: list[str] = ["auto", "sleep"]
-SPEED_MODES: list[str] = list(MANUAL_MODES)
+SPEED_RANGE = (FAN_SPEED_MIN, FAN_SPEED_MAX)
+PRESET_MODE_LIST: list[str] = list(PRESET_MODES)
+
+
+def _speed_for(percentage: int) -> int:
+    return math.ceil(percentage_to_ranged_value(SPEED_RANGE, percentage))
 
 
 async def async_setup_cloud_fans(
@@ -45,8 +62,8 @@ class BirdiePurifierFan(BirdieCloudEntity, FanEntity):
 
     _attr_name = None
     _attr_translation_key = "purifier"
-    _attr_preset_modes = PRESET_MODES
-    _attr_speed_count = len(SPEED_MODES)
+    _attr_preset_modes = PRESET_MODE_LIST
+    _attr_speed_count = int_states_in_range(SPEED_RANGE)
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED
         | FanEntityFeature.PRESET_MODE
@@ -69,8 +86,8 @@ class BirdiePurifierFan(BirdieCloudEntity, FanEntity):
         state = self.state_data
         if state.power is False:
             return 0
-        if state.mode in SPEED_MODES:
-            return ordered_list_item_to_percentage(SPEED_MODES, state.mode)
+        if state.mode == MODE_MANUAL and state.fan_speed is not None:
+            return ranged_value_to_percentage(SPEED_RANGE, state.fan_speed)
         return None
 
     @property
@@ -86,12 +103,8 @@ class BirdiePurifierFan(BirdieCloudEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on, optionally selecting a speed or preset in the same request."""
-        mode: str | None = None
-        if preset_mode is not None:
-            mode = preset_mode
-        elif percentage:
-            mode = percentage_to_ordered_list_item(SPEED_MODES, percentage)
-        await self._async_send(power=True, mode=mode)
+        speed = _speed_for(percentage) if percentage and preset_mode is None else None
+        await self._async_send(power=True, mode=preset_mode, speed=speed)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the purifier off."""
@@ -102,20 +115,27 @@ class BirdiePurifierFan(BirdieCloudEntity, FanEntity):
         if percentage == 0:
             await self.async_turn_off()
             return
-        mode = percentage_to_ordered_list_item(SPEED_MODES, percentage)
-        await self._async_send(power=None if self.is_on else True, mode=mode)
+        await self._async_send(power=None if self.is_on else True, speed=_speed_for(percentage))
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Select auto or sleep mode."""
         await self._async_send(power=None if self.is_on else True, mode=preset_mode)
 
-    async def _async_send(self, *, power: bool | None, mode: str | None = None) -> None:
-        def build(spec: DeviceSpecification) -> list[Command]:
-            commands: list[Command] = []
+    async def _async_send(
+        self, *, power: bool | None, mode: str | None = None, speed: int | None = None
+    ) -> None:
+        commands: list[Command] = []
+        try:
             if power is not None:
-                commands.append(power_command(power, spec))
+                commands.append(set_power_command(power))
             if mode is not None:
-                commands.append(mode_command(mode, spec))
-            return commands
-
-        await self.coordinator.async_send_commands(self.device_id, build)
+                commands.append(set_mode_command(mode))
+            if speed is not None:
+                commands.append(set_fan_speed_command(speed))
+        except CommandError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_command",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        await self.coordinator.async_send_commands(self.device_id, commands)

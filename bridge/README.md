@@ -17,7 +17,7 @@ See `../docs/architecture.md` for the reasoning.
 |---|---|
 | Tuya Cloud OpenAPI client (`birdie_bridge.tuya`) | Implemented; tested against an in-process fake cloud and Tuya's documented signing vectors |
 | Developer CLI (`birdie-tuya`) | Implemented |
-| HTTP API (`birdie_bridge.app`, docs/bridge-api.md) | Implemented: ownership scoping, product allow-list, command allow-list, status/spec caching, per-account rate limit, Tuya error mapping |
+| HTTP API (`birdie_bridge.app`, docs/bridge-api.md) | Implemented: Birdie-domain API (opaque device ids, state objects, named commands), ownership scoping, product allow-list, Tuya translation per model, status/spec caching, per-account rate limit, Tuya error mapping |
 | Development authentication (static tokens) | Implemented, development mode only |
 | Production authentication | Not started - depends on how the Birdie app signs users in |
 
@@ -28,8 +28,10 @@ Nothing here has been run against a real Birdie Pedestal yet.
 ```
 birdie_bridge/
   app.py        aiohttp application: routes, error envelope, auth, rate limit
-  service.py    business logic: per-user device scoping, caching, validation
-  products.py   Tuya PID -> Birdie model map and command allow-lists
+  service.py    business logic: per-user device scoping, opaque ids, caching
+  model.py      what a Birdie model provides: state decoding, command translation
+  pedestal.py   Birdie Pedestal: Tuya DPs <-> API state object and commands
+  products.py   Tuya PID -> Birdie model map
   auth.py       authenticators (development tokens today)
   tuya/         Tuya Cloud OpenAPI client: signing, token lifecycle, typed errors
   devtool.py    CLI for probing a Tuya cloud project

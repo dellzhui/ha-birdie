@@ -19,7 +19,7 @@ from homeassistant.helpers.typing import StateType
 from ..compat import MICROGRAMS_PER_CUBIC_METER
 from .coordinator import BirdieCloudConfigEntry, BirdieCloudCoordinator
 from .entity import BirdieCloudEntity, async_add_device_entities
-from .pedestal import AIR_QUALITY_LEVELS, DEVICE_STATUSES, PedestalState
+from .pedestal import AIR_QUALITY_LEVELS, FAULTS, PedestalState
 
 
 def _enum_value(value: str | None, options: tuple[str, ...]) -> str | None:
@@ -70,9 +70,9 @@ PEDESTAL_SENSORS: tuple[BirdieCloudSensorEntityDescription, ...] = (
         key="device_status",
         translation_key="device_status",
         device_class=SensorDeviceClass.ENUM,
-        options=list(DEVICE_STATUSES),
+        options=list(FAULTS),
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda state: _enum_value(state.device_error, DEVICE_STATUSES),
+        value_fn=lambda state: _enum_value(state.fault, FAULTS),
     ),
 )
 

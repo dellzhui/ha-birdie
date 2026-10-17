@@ -37,6 +37,4 @@ class BirdieResetFilterButton(BirdieCloudEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Send the filter reset command."""
-        await self.coordinator.async_send_commands(
-            self.device_id, lambda spec: [reset_filter_command(spec)]
-        )
+        await self.coordinator.async_send_commands(self.device_id, [reset_filter_command()])

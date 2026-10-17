@@ -255,7 +255,7 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         try:
             account = await client.async_get_account()
-            await client.async_list_devices(include_status=False)
+            await client.async_list_devices(include_state=False)
         except BridgeAuthError:
             return None, "invalid_auth"
         except BridgeError:

@@ -171,15 +171,15 @@ class BridgeAccount:
 
 @dataclass(frozen=True)
 class BridgeDevice:
-    """A device as returned by the bridge, optionally with its status."""
+    """A device as returned by the bridge, optionally with its state."""
 
     id: str
     name: str
     model: str
     model_name: str
-    product_id: str | None = None
     online: bool = False
-    status: Mapping[str, Any] = field(default_factory=dict)
+    hardware_version: str | None = None
+    state: Mapping[str, Any] = field(default_factory=dict)
     fetched_at: str | None = None
 
     @classmethod
@@ -189,15 +189,16 @@ class BridgeDevice:
             model = str(data["model"])
         except KeyError as err:
             raise BridgeConnectionError("Malformed device in bridge response") from err
-        status = data.get("status")
+        state = data.get("state")
+        hardware_version = data.get("hardware_version")
         return cls(
             id=device_id,
             name=str(data.get("name") or data.get("model_name") or device_id),
             model=model,
             model_name=str(data.get("model_name") or model),
-            product_id=data.get("product_id"),
             online=bool(data.get("online")),
-            status=dict(status) if isinstance(status, dict) else {},
+            hardware_version=str(hardware_version) if hardware_version else None,
+            state=dict(state) if isinstance(state, dict) else {},
             fetched_at=data.get("fetched_at"),
         )
 
@@ -224,8 +225,8 @@ class BirdieBridgeClient:
     async def async_get_account(self) -> BridgeAccount:
         return BridgeAccount.from_json(await self._request("GET", "/account"))
 
-    async def async_list_devices(self, *, include_status: bool = True) -> list[BridgeDevice]:
-        params = {"include": "status"} if include_status else None
+    async def async_list_devices(self, *, include_state: bool = True) -> list[BridgeDevice]:
+        params = {"include": "state"} if include_state else None
         data = await self._request("GET", "/devices", params=params)
         devices = data.get("devices") if isinstance(data, dict) else None
         if not isinstance(devices, list):
@@ -235,10 +236,6 @@ class BirdieBridgeClient:
     async def async_get_device(self, device_id: str) -> BridgeDevice:
         data = await self._request("GET", f"/devices/{_segment(device_id)}")
         return BridgeDevice.from_json(data)
-
-    async def async_get_specification(self, device_id: str) -> dict[str, Any]:
-        data = await self._request("GET", f"/devices/{_segment(device_id)}/specification")
-        return dict(data)
 
     async def async_send_commands(self, device_id: str, commands: list[dict[str, Any]]) -> None:
         await self._request(

@@ -45,9 +45,10 @@ async def test_diagnostics_redacts_token(
     assert diagnostics["entry"]["access_token"] == "**REDACTED**"
     device = diagnostics["devices"][DEVICE_ID]
     assert device["info"]["model"] == "pedestal"
-    assert device["status"]["pm25"] == 12
-    assert device["decoded"]["filter_life_percent"] == 75.0
-    assert device["specification"]["category"] == "kj"  # fetched by the command above
+    assert device["info"]["hardware_version"] == "1.0.0"
+    assert device["state"]["pm25"] == 12
+    assert device["decoded"]["filter_life_percent"] == 75
+    assert device["decoded"]["power"] is False  # optimistic state after the command
 
 
 async def test_remove_stale_device_only(hass: HomeAssistant, fake_bridge: FakeBridgeClient) -> None:

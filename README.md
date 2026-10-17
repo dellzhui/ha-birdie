@@ -63,7 +63,7 @@ Birdie Pedestal entities:
 | Air quality | Sensor | - | `good`, `moderate`, `poor`, `very_poor` |
 | Filter life | Sensor | % | Remaining filter life |
 | Filter time remaining | Sensor | days | Remaining filter time |
-| Device status | Sensor | - | Diagnostic: `normal`, `fan`, `pm25`, `ocp` |
+| Device status | Sensor | - | Diagnostic: `none` (normal), `fan`, `pm25_sensor`, `overcurrent` |
 | Filter replacement | Binary sensor | - | On when the filter should be replaced |
 | Filter cover | Binary sensor | - | Diagnostic: on when the filter cover is open |
 | Reset filter | Button | - | Resets the filter counter after a filter change |

@@ -98,10 +98,10 @@
       "device_status": {
         "name": "Device status",
         "state": {
-          "normal": "Normal",
+          "none": "Normal",
           "fan": "Fan fault",
-          "pm25": "PM2.5 sensor fault",
-          "ocp": "Overcurrent protection"
+          "pm25_sensor": "PM2.5 sensor fault",
+          "overcurrent": "Overcurrent protection"
         }
       }
     }

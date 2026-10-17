@@ -31,26 +31,17 @@ async def async_get_config_entry_diagnostics(
     devices: dict[str, Any] = {}
     for device_id, device in (coordinator.data or {}).items():
         info = device.info
-        state = device.state
-        spec = coordinator.cached_specification(device_id)
         devices[device_id] = {
             "info": {
                 "name": info.name,
                 "model": info.model,
                 "model_name": info.model_name,
-                "product_id": info.product_id,
                 "online": info.online,
+                "hardware_version": info.hardware_version,
                 "fetched_at": info.fetched_at,
             },
-            "status": dict(info.status),
-            "decoded": {
-                **{key: value for key, value in asdict(state).items() if key != "raw"},
-                "filter_life_percent": state.filter_life_percent,
-                "filter_remaining_minutes": state.filter_remaining_minutes,
-                "filter_replace_needed": state.filter_replace_needed,
-                "filter_cover_open": state.filter_cover_open,
-            },
-            "specification": asdict(spec) if spec else None,
+            "state": dict(info.state),
+            "decoded": {key: value for key, value in asdict(device.state).items() if key != "raw"},
         }
     result["devices"] = devices
     return result

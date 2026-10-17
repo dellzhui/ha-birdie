@@ -1,59 +1,16 @@
-"""Birdie products served by the bridge and the commands they accept.
+"""Birdie products served by the bridge.
 
-The Tuya product id (PID) is mapped to a Birdie model key so the Home
-Assistant integration never depends on Tuya identifiers. Only mapped products
-are listed, and only allow-listed commands are forwarded to Tuya.
+The Tuya product id (PID) is mapped to a Birdie model so clients never depend
+on Tuya identifiers. Only mapped products are listed; each model defines which
+commands it accepts (see ``model.py``).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
-from typing import Any
+from collections.abc import Mapping
 
-
-@dataclass(frozen=True)
-class CommandRule:
-    """Validation for one writable DP. ``check`` returns an error message or None."""
-
-    code: str
-    check: Callable[[Any, Mapping[str, Any]], str | None]
-
-
-@dataclass(frozen=True)
-class Model:
-    key: str
-    name: str
-    commands: Mapping[str, CommandRule] = field(default_factory=dict)
-
-
-def _bool(value: Any, _spec_values: Mapping[str, Any]) -> str | None:
-    return None if isinstance(value, bool) else "expects a boolean"
-
-
-def _true(value: Any, _spec_values: Mapping[str, Any]) -> str | None:
-    return None if value is True else "only accepts true"
-
-
-def _enum_in_spec(value: Any, spec_values: Mapping[str, Any]) -> str | None:
-    allowed = spec_values.get("range") or []
-    if not isinstance(value, str) or value not in allowed:
-        return f"expects one of {list(allowed)}"
-    return None
-
-
-PEDESTAL = Model(
-    key="pedestal",
-    name="Birdie Pedestal",
-    commands={
-        rule.code: rule
-        for rule in (
-            CommandRule("switch", _bool),
-            CommandRule("mode", _enum_in_spec),
-            CommandRule("reset_filter", _true),
-        )
-    },
-)
+from .model import Model
+from .pedestal import PEDESTAL
 
 MODELS: Mapping[str, Model] = {PEDESTAL.key: PEDESTAL}
 

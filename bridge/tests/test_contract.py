@@ -18,7 +18,7 @@ from aiohttp.test_utils import TestServer
 from birdie_bridge.app import create_app
 from birdie_bridge.auth import DevTokenAuthenticator, account_id_for
 from birdie_bridge.products import ProductCatalog
-from birdie_bridge.service import BridgeService
+from birdie_bridge.service import BridgeService, device_id_for
 from birdie_bridge.tuya import TuyaCloudClient
 
 from .conftest import FakeClock
@@ -32,7 +32,8 @@ pedestal = pytest.importorskip("custom_components.birdie.cloud.pedestal")
 
 TOKEN = "dev-token-contract"
 UID = "synthuser0001"
-DEVICE_ID = "bfsynthetic0000001"
+TUYA_ID = "bfsynthetic0000001"
+DEVICE_ID = device_id_for(TUYA_ID)
 
 
 @pytest.fixture
@@ -59,17 +60,30 @@ async def test_full_round_trip(
     (device,) = await ha_client.async_list_devices()
     assert device.id == DEVICE_ID
     assert device.model == pedestal.MODEL_PEDESTAL
-    state = pedestal.PedestalState.from_status(device.status)
+    assert device.hardware_version == "1.0.0"
+    state = pedestal.PedestalState.from_api(device.state)
     assert state.pm25 == 12
-    assert state.filter_life_percent == 75.0
+    assert state.filter_life_percent == 75
+    assert state.fault == "none"
 
-    spec = pedestal.DeviceSpecification.from_api(await ha_client.async_get_specification(DEVICE_ID))
-    commands = [pedestal.power_command(True, spec), pedestal.mode_command("manual3", spec)]
+    commands = [pedestal.set_power_command(True), pedestal.set_fan_speed_command(3)]
     await ha_client.async_send_commands(DEVICE_ID, commands)
-    assert cloud.commands[-1] == (DEVICE_ID, commands)
+    assert cloud.commands[-1] == (
+        TUYA_ID,
+        [{"code": "switch", "value": True}, {"code": "mode", "value": "manual3"}],
+    )
 
     (device,) = await ha_client.async_list_devices()
-    assert pedestal.PedestalState.from_status(device.status).mode == "manual3"
+    state = pedestal.PedestalState.from_api(device.state)
+    assert (state.mode, state.fan_speed) == ("manual", 3)
+    assert pedestal.apply_commands(state, commands) == state  # optimistic matches confirmed
+
+    for command in (pedestal.set_mode_command("sleep"), pedestal.reset_filter_command()):
+        await ha_client.async_send_commands(DEVICE_ID, [command])
+    assert cloud.commands[-2:] == [
+        (TUYA_ID, [{"code": "mode", "value": "sleep"}]),
+        (TUYA_ID, [{"code": "reset_filter", "value": True}]),
+    ]
 
 
 async def test_errors_cross_the_contract(
@@ -77,11 +91,15 @@ async def test_errors_cross_the_contract(
 ) -> None:
     cloud.add_pedestal("bfoffline", online=False)
     with pytest.raises(ha_bridge.BridgeDeviceOfflineError):
-        await ha_client.async_send_commands("bfoffline", [{"code": "switch", "value": True}])
+        await ha_client.async_send_commands(
+            device_id_for("bfoffline"), [pedestal.set_power_command(True)]
+        )
     with pytest.raises(ha_bridge.BridgeDeviceNotFoundError):
-        await ha_client.async_get_specification("bfnotmine")
+        await ha_client.async_get_device(TUYA_ID)  # Tuya ids are not accepted
     with pytest.raises(ha_bridge.BridgeCommandRejectedError):
-        await ha_client.async_send_commands(DEVICE_ID, [{"code": "pm25", "value": 1}])
+        await ha_client.async_send_commands(
+            DEVICE_ID, [{"name": "set_fan_speed", "params": {"speed": 9}}]
+        )
     cloud.force_error[f"/v1.0/users/{UID}/devices"] = (1199, "too frequent")
     clock.advance(11)  # let the bridge's status cache expire
     with pytest.raises(ha_bridge.BridgeRateLimitError) as info:

@@ -1,16 +1,21 @@
 {
-  "id": "bfsynthetic0000001",
-  "uuid": "synthuuid0000001",
-  "name": "Birdie Pedestal",
-  "custom_name": "Living Room Purifier",
-  "product_id": "synthpid00000001",
-  "product_name": "Birdie Pedestal",
-  "category": "kj",
-  "is_online": true,
-  "sub": false,
-  "local_key": "SYNTHETIC-LOCAL-KEY",
-  "ip": "203.0.113.10",
-  "lat": "0.0",
-  "lon": "0.0",
-  "time_zone": "+00:00"
+  "id": "5b0c9e7d2a4f4e1c8a3d6b90",
+  "name": "Living Room Purifier",
+  "model": "pedestal",
+  "model_name": "Birdie Pedestal",
+  "online": true,
+  "hardware_version": "1.0.0",
+  "state": {
+    "power": true,
+    "mode": "auto",
+    "fan_speed": null,
+    "pm25": 12,
+    "air_quality": "good",
+    "filter_life_percent": 75,
+    "filter_remaining_minutes": 97200,
+    "filter_replace_needed": false,
+    "filter_cover_open": false,
+    "fault": "none"
+  },
+  "fetched_at": "2026-10-17T12:00:00Z"
 }

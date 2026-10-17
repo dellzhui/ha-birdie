@@ -2,12 +2,15 @@
 
 Every operation is scoped to one ``Principal``: a device is visible only if
 Tuya lists it among that user's devices and its product is a known Birdie
-model. Results are shaped as described in docs/bridge-api.md.
+model. Results are shaped as described in docs/bridge-api.md and contain no
+Tuya identifiers or data point codes: devices get opaque ids and their state
+and commands are translated by the device's ``Model``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -17,7 +20,8 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from .auth import Principal
-from .products import Model, ProductCatalog
+from .model import CommandRejected, Model, WritableFunctions
+from .products import ProductCatalog
 from .tuya import (
     TuyaApiError,
     TuyaAuthError,
@@ -87,11 +91,31 @@ def map_tuya_error(err: TuyaError) -> BridgeHttpError:
     return BridgeHttpError(502, "upstream_error", "Unexpected cloud error")
 
 
+def device_id_for(tuya_device_id: str) -> str:
+    """Opaque, stable public device id; the Tuya device id is never returned."""
+    return hashlib.sha256(f"birdie-device:{tuya_device_id}".encode()).hexdigest()[:24]
+
+
+@dataclass(frozen=True)
+class _Device:
+    tuya_id: str
+    model: Model
+    record: Mapping[str, Any]  # raw Tuya record; never returned as is
+
+    @property
+    def status(self) -> dict[str, Any]:
+        return {
+            item["code"]: item.get("value")
+            for item in self.record.get("status") or []
+            if isinstance(item, dict) and isinstance(item.get("code"), str)
+        }
+
+
 @dataclass(frozen=True)
 class _UserDevices:
     fetched_at: float  # monotonic, for cache expiry
     fetched_at_iso: str
-    devices: Mapping[str, tuple[Model, Mapping[str, Any]]]  # id -> (model, raw tuya record)
+    devices: Mapping[str, _Device]  # public id -> device
 
 
 class BridgeService:
@@ -111,52 +135,42 @@ class BridgeService:
         self._status_ttl = status_ttl
         self._users: dict[str, _UserDevices] = {}
         self._user_locks: dict[str, asyncio.Lock] = {}
-        self._specs: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._specs: dict[str, tuple[float, WritableFunctions]] = {}
 
     # ---------------------------------------------------------- public API
 
     async def get_account(self, principal: Principal) -> dict[str, Any]:
         return {"id": principal.account_id, "display_name": principal.display_name}
 
-    async def list_devices(self, principal: Principal, *, include_status: bool) -> dict[str, Any]:
+    async def list_devices(self, principal: Principal, *, include_state: bool) -> dict[str, Any]:
         snapshot = await self._user_devices(principal)
         return {
             "devices": [
-                self._device_json(device_id, model, raw, snapshot, include_status)
-                for device_id, (model, raw) in snapshot.devices.items()
+                _device_json(device_id, device, snapshot, include_state)
+                for device_id, device in snapshot.devices.items()
             ]
         }
 
     async def get_device(self, principal: Principal, device_id: str) -> dict[str, Any]:
         snapshot = await self._user_devices(principal)
-        model, raw = self._owned(snapshot, device_id)
-        return self._device_json(device_id, model, raw, snapshot, include_status=True)
-
-    async def get_specification(self, principal: Principal, device_id: str) -> dict[str, Any]:
-        self._owned(await self._user_devices(principal), device_id)
-        return await self._specification(device_id)
+        device = self._owned(snapshot, device_id)
+        return _device_json(device_id, device, snapshot, include_state=True)
 
     async def send_commands(
         self, principal: Principal, device_id: str, body: Any
     ) -> dict[str, Any]:
         commands = _parse_commands(body)
-        model, _raw = self._owned(await self._user_devices(principal), device_id)
-        spec = await self._specification(device_id)
-        spec_values = {item["code"]: item.get("values") or {} for item in spec["functions"]}
-        for command in commands:
-            rule = model.commands.get(command["code"])
-            if rule is None or command["code"] not in spec_values:
-                raise BridgeHttpError(
-                    422, "command_rejected", f"Command {command['code']!r} is not allowed"
-                )
-            problem = rule.check(command["value"], spec_values[command["code"]])
-            if problem:
-                raise BridgeHttpError(422, "command_rejected", f"{command['code']} {problem}")
+        device = self._owned(await self._user_devices(principal), device_id)
+        functions = await self._writable_functions(device.tuya_id)
         try:
-            await self._tuya.async_send_commands(device_id, commands)
+            tuya_commands = device.model.translate_commands(commands, functions)
+        except CommandRejected as err:
+            raise BridgeHttpError(422, "command_rejected", str(err)) from None
+        try:
+            await self._tuya.async_send_commands(device.tuya_id, tuya_commands)
         except TuyaError as err:
             raise map_tuya_error(err) from err
-        self._users.pop(principal.tuya_uid, None)  # next read shows fresh status
+        self._users.pop(principal.tuya_uid, None)  # next read shows fresh state
         return {"accepted": True}
 
     # ------------------------------------------------------------ internals
@@ -172,12 +186,12 @@ class BridgeService:
                 records = await self._tuya.async_get_user_devices(uid)
             except TuyaError as err:
                 raise map_tuya_error(err) from err
-            devices: dict[str, tuple[Model, Mapping[str, Any]]] = {}
+            devices: dict[str, _Device] = {}
             for record in records:
                 model = self._catalog.model_for(record.get("product_id"))
-                device_id = record.get("id")
-                if model and isinstance(device_id, str):
-                    devices[device_id] = (model, record)
+                tuya_id = record.get("id")
+                if model and isinstance(tuya_id, str):
+                    devices[device_id_for(tuya_id)] = _Device(tuya_id, model, record)
             snapshot = _UserDevices(
                 fetched_at=self._clock(),
                 fetched_at_iso=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -187,68 +201,58 @@ class BridgeService:
             return snapshot
 
     @staticmethod
-    def _owned(snapshot: _UserDevices, device_id: str) -> tuple[Model, Mapping[str, Any]]:
+    def _owned(snapshot: _UserDevices, device_id: str) -> _Device:
         try:
             return snapshot.devices[device_id]
         except KeyError:
             raise device_not_found() from None
 
-    async def _specification(self, device_id: str) -> dict[str, Any]:
-        cached = self._specs.get(device_id)
+    async def _writable_functions(self, tuya_id: str) -> WritableFunctions:
+        """Writable DPs of a device and their decoded ``values``, cached."""
+        cached = self._specs.get(tuya_id)
         if cached and self._clock() - cached[0] < SPEC_CACHE_SECONDS:
             return cached[1]
         try:
-            raw = await self._tuya.async_get_device_specification(device_id)
+            raw = await self._tuya.async_get_device_specification(tuya_id)
         except TuyaError as err:
             raise map_tuya_error(err) from err
-        spec = {
-            "category": raw.get("category"),
-            "functions": [_spec_item(item) for item in raw.get("functions") or []],
-            "status": [_spec_item(item) for item in raw.get("status") or []],
+        functions = {
+            item["code"]: _decode_values(item.get("values"))
+            for item in raw.get("functions") or []
+            if isinstance(item, dict) and isinstance(item.get("code"), str)
         }
-        self._specs[device_id] = (self._clock(), spec)
-        return spec
-
-    @staticmethod
-    def _device_json(
-        device_id: str,
-        model: Model,
-        raw: Mapping[str, Any],
-        snapshot: _UserDevices,
-        include_status: bool,
-    ) -> dict[str, Any]:
-        # Whitelist fields: never pass local_key, ip, lat/lon or uid through.
-        result: dict[str, Any] = {
-            "id": device_id,
-            "name": raw.get("name") or model.name,
-            "model": model.key,
-            "model_name": model.name,
-            "product_id": raw.get("product_id"),
-            "online": bool(raw.get("online", raw.get("is_online"))),
-        }
-        if include_status:
-            result["status"] = {
-                item["code"]: item.get("value")
-                for item in raw.get("status") or []
-                if isinstance(item, dict) and isinstance(item.get("code"), str)
-            }
-            result["fetched_at"] = snapshot.fetched_at_iso
-        return result
+        self._specs[tuya_id] = (self._clock(), functions)
+        return functions
 
 
-def _spec_item(item: Mapping[str, Any]) -> dict[str, Any]:
-    """Decode Tuya's JSON-in-a-string ``values`` into an object."""
-    values: Any = item.get("values")
+def _device_json(
+    device_id: str, device: _Device, snapshot: _UserDevices, include_state: bool
+) -> dict[str, Any]:
+    # Built field by field: never pass Tuya ids, local_key, ip, lat/lon or uid through.
+    raw = device.record
+    status = device.status
+    result: dict[str, Any] = {
+        "id": device_id,
+        "name": raw.get("name") or device.model.name,
+        "model": device.model.key,
+        "model_name": device.model.name,
+        "online": bool(raw.get("online", raw.get("is_online"))),
+        "hardware_version": device.model.hardware_version(status),
+    }
+    if include_state:
+        result["state"] = device.model.decode_state(status)
+        result["fetched_at"] = snapshot.fetched_at_iso
+    return result
+
+
+def _decode_values(values: Any) -> dict[str, Any]:
+    """Decode Tuya's JSON-in-a-string ``values``."""
     if isinstance(values, str):
         try:
             values = json.loads(values) if values else {}
         except json.JSONDecodeError:
             values = {}
-    return {
-        "code": item.get("code"),
-        "type": item.get("type"),
-        "values": values if isinstance(values, dict) else {},
-    }
+    return values if isinstance(values, dict) else {}
 
 
 def _parse_commands(body: Any) -> list[dict[str, Any]]:
@@ -259,9 +263,10 @@ def _parse_commands(body: Any) -> list[dict[str, Any]]:
         )
     parsed = []
     for command in commands:
-        if not isinstance(command, dict) or not isinstance(command.get("code"), str):
-            raise BridgeHttpError(400, "invalid_request", "Each command needs a string 'code'")
-        if "value" not in command:
-            raise BridgeHttpError(400, "invalid_request", "Each command needs a 'value'")
-        parsed.append({"code": command["code"], "value": command["value"]})
+        if not isinstance(command, dict) or not isinstance(command.get("name"), str):
+            raise BridgeHttpError(400, "invalid_request", "Each command needs a string 'name'")
+        params = command.get("params", {})
+        if not isinstance(params, dict):
+            raise BridgeHttpError(400, "invalid_request", "'params' must be an object")
+        parsed.append({"name": command["name"], "params": params})
     return parsed

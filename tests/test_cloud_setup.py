@@ -43,6 +43,14 @@ from .helpers import DEVICE_ID, FakeBridgeClient, mock_cloud_entry
 FAN = "fan.living_room_purifier"
 
 
+def _power(on: bool) -> dict:
+    return {"name": "set_power", "params": {"on": on}}
+
+
+def _speed(speed: int) -> dict:
+    return {"name": "set_fan_speed", "params": {"speed": speed}}
+
+
 @pytest.fixture
 async def setup_entry(hass: HomeAssistant, fake_bridge: FakeBridgeClient):
     entry = mock_cloud_entry()
@@ -68,10 +76,10 @@ async def test_entities_and_device(hass: HomeAssistant, setup_entry) -> None:
 
     assert hass.states.get(_entity_id(hass, "sensor", "pm25")).state == "12"
     assert hass.states.get(_entity_id(hass, "sensor", "air_quality")).state == "good"
-    assert hass.states.get(_entity_id(hass, "sensor", "filter_life")).state == "75.0"
+    assert hass.states.get(_entity_id(hass, "sensor", "filter_life")).state == "75"
     remaining = hass.states.get(_entity_id(hass, "sensor", "filter_remaining"))
     assert float(remaining.state) == pytest.approx(67.5)  # 97200 min shown in days
-    assert hass.states.get(_entity_id(hass, "sensor", "device_status")).state == "normal"
+    assert hass.states.get(_entity_id(hass, "sensor", "device_status")).state == "none"
     assert (
         hass.states.get(_entity_id(hass, "binary_sensor", "filter_replacement")).state == STATE_OFF
     )
@@ -96,7 +104,7 @@ async def test_fan_speed_and_presets(
         {ATTR_ENTITY_ID: FAN, ATTR_PERCENTAGE: 50},
         blocking=True,
     )
-    assert fake_bridge.commands[-1] == (DEVICE_ID, [{"code": "mode", "value": "manual2"}])
+    assert fake_bridge.commands[-1] == (DEVICE_ID, [_speed(2)])
     state = hass.states.get(FAN)
     assert state.attributes[ATTR_PERCENTAGE] == 50  # optimistic until the next poll
     assert state.attributes[ATTR_PRESET_MODE] is None
@@ -104,7 +112,7 @@ async def test_fan_speed_and_presets(
     await hass.services.async_call(
         FAN_DOMAIN, SERVICE_TURN_OFF, {ATTR_ENTITY_ID: FAN}, blocking=True
     )
-    assert fake_bridge.commands[-1] == (DEVICE_ID, [{"code": "switch", "value": False}])
+    assert fake_bridge.commands[-1] == (DEVICE_ID, [_power(False)])
     assert hass.states.get(FAN).state == STATE_OFF
 
     await hass.services.async_call(
@@ -115,17 +123,20 @@ async def test_fan_speed_and_presets(
     )
     assert fake_bridge.commands[-1] == (
         DEVICE_ID,
-        [{"code": "switch", "value": True}, {"code": "mode", "value": "sleep"}],
+        [_power(True), {"name": "set_mode", "params": {"mode": "sleep"}}],
     )
+    assert hass.states.get(FAN).attributes[ATTR_PRESET_MODE] == "sleep"
 
     await hass.services.async_call(
         FAN_DOMAIN, SERVICE_TURN_ON, {ATTR_ENTITY_ID: FAN, ATTR_PERCENTAGE: 100}, blocking=True
     )
-    assert fake_bridge.commands[-1] == (
-        DEVICE_ID,
-        [{"code": "switch", "value": True}, {"code": "mode", "value": "manual4"}],
+    assert fake_bridge.commands[-1] == (DEVICE_ID, [_power(True), _speed(4)])
+
+    await hass.services.async_call(
+        FAN_DOMAIN, SERVICE_SET_PERCENTAGE, {ATTR_ENTITY_ID: FAN, ATTR_PERCENTAGE: 1}, blocking=True
     )
-    assert fake_bridge.spec_requests == 1  # specification fetched once and cached
+    assert fake_bridge.commands[-1] == (DEVICE_ID, [_speed(1)])
+    assert hass.states.get(FAN).attributes[ATTR_PERCENTAGE] == 25
 
 
 async def test_post_command_refresh(
@@ -149,7 +160,7 @@ async def test_reset_filter_button(
         {ATTR_ENTITY_ID: _entity_id(hass, "button", "reset_filter")},
         blocking=True,
     )
-    assert fake_bridge.commands[-1] == (DEVICE_ID, [{"code": "reset_filter", "value": True}])
+    assert fake_bridge.commands[-1] == (DEVICE_ID, [{"name": "reset_filter", "params": {}}])
 
 
 async def test_command_to_offline_device(

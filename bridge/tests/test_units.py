@@ -11,7 +11,8 @@ from birdie_bridge.auth import (
     account_id_for,
     parse_dev_tokens,
 )
-from birdie_bridge.products import PEDESTAL, ProductCatalog, parse_product_map
+from birdie_bridge.pedestal import PEDESTAL
+from birdie_bridge.products import ProductCatalog, parse_product_map
 
 
 def test_parse_dev_tokens() -> None:
@@ -52,16 +53,6 @@ def test_parse_product_map() -> None:
     assert parse_product_map("") == {}
     with pytest.raises(ValueError):
         parse_product_map("p1")
-
-
-def test_pedestal_command_rules() -> None:
-    rules = PEDESTAL.commands
-    assert rules["switch"].check(True, {}) is None
-    assert rules["switch"].check(1, {}) is not None
-    assert rules["mode"].check("auto", {"range": ["auto"]}) is None
-    assert rules["mode"].check("turbo", {"range": ["auto"]}) is not None
-    assert rules["reset_filter"].check(True, {}) is None
-    assert rules["reset_filter"].check(False, {}) is not None
 
 
 def test_authenticator_selection() -> None:

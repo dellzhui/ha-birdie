@@ -50,15 +50,16 @@ forwards `switch`, `mode` and `reset_filter` commands.
 ## Checklist
 
 Record results (with the diagnostics download from the Home Assistant device
-page) and update `custom_components/birdie/cloud/pedestal.py` where an
-assumption was wrong.
+page) and `birdie-tuya status` for the raw DPs. Where an assumption was
+wrong, update `bridge/birdie_bridge/pedestal.py`; the Home Assistant
+integration does not see Tuya DPs and needs no change.
 
 | # | Check | How | Expected / question |
 |---|---|---|---|
 | 1 | Product id | `user-devices` | Matches `a2zf7q0zxcutn5dy`; is it the production PID? |
 | 2 | DP types match the console | `spec` | Boolean/Integer/Enum as in the console screenshot |
 | 3 | Power on/off | Fan toggle in HA | Device turns on/off; `switch` reported back |
-| 4 | Speeds | Fan 25/50/75/100 % | `mode` becomes `manual1`..`manual4`; airflow changes |
+| 4 | Speeds | Fan 25/50/75/100 % | Tuya `mode` becomes `manual1`..`manual4`; airflow changes |
 | 5 | Presets | Auto, Sleep | `mode` becomes `auto` / `sleep` |
 | 6 | Mode while off | Set speed when off | Does the device accept `mode` while off, or must it be on first? |
 | 7 | PM2.5 | Sensor vs app | Same value as the Birdie app; update interval? |

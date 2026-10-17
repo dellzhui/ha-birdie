@@ -117,22 +117,16 @@ async def _account(request: web.Request) -> web.Response:
 async def _devices(request: web.Request) -> web.Response:
     principal = await _principal(request)
     include = request.query.get("include", "")
-    if include not in ("", "status"):
-        raise BridgeHttpError(400, "invalid_request", "include must be 'status'")
+    if include not in ("", "state"):
+        raise BridgeHttpError(400, "invalid_request", "include must be 'state'")
     service = request.app[SERVICE_KEY]
-    return _json(await service.list_devices(principal, include_status=include == "status"))
+    return _json(await service.list_devices(principal, include_state=include == "state"))
 
 
 async def _device(request: web.Request) -> web.Response:
     principal = await _principal(request)
     device_id = request.match_info["device_id"]
     return _json(await request.app[SERVICE_KEY].get_device(principal, device_id))
-
-
-async def _specification(request: web.Request) -> web.Response:
-    principal = await _principal(request)
-    device_id = request.match_info["device_id"]
-    return _json(await request.app[SERVICE_KEY].get_specification(principal, device_id))
 
 
 async def _commands(request: web.Request) -> web.Response:
@@ -163,6 +157,5 @@ def create_app(
     app.router.add_get("/v1/account", _account)
     app.router.add_get("/v1/devices", _devices)
     app.router.add_get("/v1/devices/{device_id}", _device)
-    app.router.add_get("/v1/devices/{device_id}/specification", _specification)
     app.router.add_post("/v1/devices/{device_id}/commands", _commands)
     return app

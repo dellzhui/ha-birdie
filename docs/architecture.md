@@ -161,20 +161,23 @@ publishing it is acceptable; otherwise move it to a private repository.
 * Branding: since HA 2026.3 a custom integration ships `brand/icon.png`,
   `logo.png` (+ `@2x`, dark variants) in its own folder; the brands repo no
   longer accepts custom integrations. Set `hacs.json` minimum HA to 2026.3.0.
-* Device registry: manufacturer "Birdie", model "Pedestal", hw_version from DP 110.
+* The integration only sees the bridge API's Birdie terms (opaque device ids,
+  state objects, named commands); the bridge translates to and from Tuya DPs.
+* Device registry: manufacturer "Birdie", model "Birdie Pedestal",
+  hw_version from the device's `hardware_version` (Tuya DP 110).
 * Entities (HA guidance: air purifiers are `fan` entities; named manual speeds
   are percentages, presets are device-managed modes):
 
-| DP | Entity |
+| Bridge state / command (Tuya DP) | Entity |
 |---|---|
-| switch, mode | `fan`: on/off; `manual1..4` -> 25/50/75/100 %; presets `auto`, `sleep` |
-| pm25 | `sensor` PM25, ug/m3, measurement |
-| air_quality | `sensor` enum: good / moderate / poor / very_poor |
-| filter_total/used_minutes | `sensor` filter life % (diagnostic); remaining duration |
-| filter_status | `binary_sensor` (bool; true/false meaning TBC) |
-| reset_filter | `button` (config) |
-| filter_cover | `binary_sensor` opening (bool; true/false meaning TBC) |
-| device_error | `sensor` enum diagnostic: normal / fan / pm25 / ocp |
+| `power`, `mode`, `fan_speed` / `set_power`, `set_mode`, `set_fan_speed` (switch, mode) | `fan`: on/off; speed 1-4 -> 25/50/75/100 %; presets `auto`, `sleep` |
+| `pm25` (pm25) | `sensor` PM25, ug/m3, measurement |
+| `air_quality` (air_quality) | `sensor` enum: good / moderate / poor / very_poor |
+| `filter_life_percent`, `filter_remaining_minutes` (filter_total/used_minutes) | `sensor` filter life %; remaining duration |
+| `filter_replace_needed` (filter_status) | `binary_sensor` problem (DP meaning TBC) |
+| `reset_filter` (reset_filter) | `button` (config) |
+| `filter_cover_open` (filter_cover) | `binary_sensor` opening, diagnostic (DP meaning TBC) |
+| `fault` (device_error) | `sensor` enum diagnostic: none / fan / pm25_sensor / overcurrent |
 
 * Coordinator: cloud polling (default 60 s, configurable), `ConfigEntryAuthFailed`
   for re-auth, `UpdateFailed` for transient errors, entities unavailable when
@@ -186,7 +189,7 @@ Our own Tuya developer account can reproduce the Pedestal's DP schema in a
 self-created product and debug it with a Tuya *virtual device* (Product ->
 Device Debugging; the web debugger can change DP values and report them to
 the cloud). Linked to our own cloud project through a Smart Life account, it
-exercises the real Tuya Cloud: signing, tokens, specification, status and
+exercises the real Tuya Cloud: signing, tokens, DP specification, status and
 commands. It cannot validate firmware behaviour, Birdie's PID, or Birdie's
 App SDK account model. See https://developer.tuya.com/en/docs/iot/device_debug?id=Kbrcqod1qa730
 and https://developer.tuya.com/en/docs/iot/manage-virtual-devices?id=Ka4725tiyfhg0
