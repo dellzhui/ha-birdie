@@ -23,6 +23,9 @@ include = ["birdie_bridge*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# The bridge is not a Home Assistant component; if the HA test plugin is
+# installed in the same environment, keep it (and its socket blocking) out.
+addopts = "-p no:homeassistant"
 
 [tool.ruff]
 line-length = 100

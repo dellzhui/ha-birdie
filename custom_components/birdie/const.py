@@ -2,11 +2,35 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 DOMAIN = "birdie"
 
 CONF_NAME = "name"
 
 PLATFORMS: list[str] = ["sensor", "binary_sensor", "number"]
+CLOUD_PLATFORMS: list[str] = ["sensor", "binary_sensor", "fan", "button"]
+
+# Config entry types. Entries created before cloud support have no type and
+# are Bluetooth entries.
+CONF_ENTRY_TYPE = "entry_type"
+ENTRY_TYPE_BLUETOOTH = "bluetooth"
+ENTRY_TYPE_CLOUD = "cloud"
+
+CONF_BRIDGE_URL = "bridge_url"
+CONF_ACCESS_TOKEN = "access_token"
+CONF_ACCOUNT_ID = "account_id"
+
+
+
+def is_cloud_entry_data(data: Mapping[str, Any]) -> bool:
+    """Return True if config entry data belongs to a Birdie cloud account."""
+    return data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CLOUD
+
+
+CLOUD_SCAN_INTERVAL_SECONDS = 60
+CLOUD_COMMAND_REFRESH_DELAY_SECONDS = 2
 
 BIRDIE_NAME_PREFIXES: tuple[str, ...] = ("Birdie", "Birdie Pro")
 

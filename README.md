@@ -3,8 +3,10 @@
 [![HACS validation](https://github.com/dellzhui/ha-birdie/actions/workflows/hacs.yml/badge.svg)](https://github.com/dellzhui/ha-birdie/actions/workflows/hacs.yml)
 [![Hassfest validation](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml/badge.svg)](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml)
 
-Birdie is a Home Assistant custom integration for Birdie BLE air quality
-monitors, including Birdie Pro.
+Birdie is a Home Assistant custom integration for Birdie products: Birdie BLE
+air quality monitors, including Birdie Pro, and (in development) Wi-Fi Birdie
+devices connected through a Birdie account, starting with the Birdie Pedestal
+air purifier.
 
 ## Status
 
@@ -37,6 +39,33 @@ approved, add this repository manually in HACS.
 | Battery | Sensor | % | Battery level mapped from the device enum |
 | CO2 threshold | Number | ppm | Writable, 400-5000 ppm |
 | Cool down period | Number | min | Writable, 1-240 min |
+
+## Birdie Account Devices (In Development)
+
+Wi-Fi Birdie devices are added with **Add integration > Birdie > Birdie
+account**. Home Assistant talks to the Birdie cloud service, never directly to
+the device vendor's cloud, and polls every 60 seconds.
+
+Account sign-in is not final yet: the current development build asks for the
+Birdie cloud URL and an access token. See `docs/architecture.md` and
+`docs/bridge-api.md`.
+
+Birdie Pedestal entities:
+
+| Entity | Platform | Unit | Notes |
+| --- | --- | --- | --- |
+| Purifier | Fan | - | On/off, 4 speeds (25/50/75/100 %), presets `auto` and `sleep` |
+| PM2.5 | Sensor | ug/m3 | Particulate matter |
+| Air quality | Sensor | - | `good`, `moderate`, `poor`, `very_poor` |
+| Filter life | Sensor | % | Remaining filter life |
+| Filter time remaining | Sensor | days | Remaining filter time |
+| Device status | Sensor | - | Diagnostic: `normal`, `fan`, `pm25`, `ocp` |
+| Filter replacement | Binary sensor | - | On when the filter should be replaced |
+| Filter cover | Binary sensor | - | Diagnostic: on when the filter cover is open |
+| Reset filter | Button | - | Resets the filter counter after a filter change |
+
+The meaning of the filter replacement and filter cover values has not been
+confirmed on a real device yet.
 
 ## Installation
 

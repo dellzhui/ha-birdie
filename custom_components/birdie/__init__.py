@@ -5,13 +5,18 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .const import DOMAIN, PLATFORMS
+from .const import DOMAIN, PLATFORMS, is_cloud_entry_data
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: Any, entry: Any) -> bool:
     """Set up Birdie from a config entry."""
+    if is_cloud_entry_data(entry.data):
+        from .cloud.entry import async_setup_cloud_entry
+
+        return await async_setup_cloud_entry(hass, entry)
+
     from homeassistant.components import bluetooth
     from homeassistant.components.bluetooth.match import ADDRESS, BluetoothCallbackMatcher
     from homeassistant.const import EVENT_HOMEASSISTANT_STOP
@@ -62,6 +67,11 @@ async def async_setup_entry(hass: Any, entry: Any) -> bool:
 
 async def async_unload_entry(hass: Any, entry: Any) -> bool:
     """Unload a Birdie config entry."""
+    if is_cloud_entry_data(entry.data):
+        from .cloud.entry import async_unload_cloud_entry
+
+        return await async_unload_cloud_entry(hass, entry)
+
     from homeassistant.components import bluetooth
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

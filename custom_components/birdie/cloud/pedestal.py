@@ -4,9 +4,10 @@ Maps Tuya data points (DPs) to a typed state object and builds commands.
 Nothing here performs I/O.
 
 DP codes, types, ranges and transfer modes come from the product definition
-in Birdie's Tuya Developer console (product "Birdie Pedestal", screenshot
-received 2026-10-17). They describe the product schema, not observed device
-behaviour: the meaning of the boolean DPs and the effect of ``reset_filter``
+in Birdie's Tuya Developer console (product "Birdie Pedestal", PID
+a2zf7q0zxcutn5dy, screenshot received 2026-10-17). They describe the product
+schema, not observed device behaviour: the meaning of the boolean DPs and the
+effect of ``reset_filter``
 are still unconfirmed. At runtime, commands are validated against the
 specification the cloud reports for the device.
 """
@@ -21,12 +22,6 @@ from enum import StrEnum
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
-
-TUYA_CATEGORY_AIR_PURIFIER = "kj"
-
-# Tuya product id of the Birdie Pedestal (product status "Developing" in the
-# console). Production may use additional ids; keep this list configurable.
-PEDESTAL_PRODUCT_IDS: tuple[str, ...] = ("a2zf7q0zxcutn5dy",)
 
 
 class DP(StrEnum):
@@ -66,8 +61,12 @@ AIR_QUALITY_LEVELS: tuple[str, ...] = ("good", "moderate", "poor", "very_poor")
 DEVICE_STATUSES: tuple[str, ...] = ("normal", "fan", "pm25", "ocp")
 DEVICE_STATUS_OK = "normal"
 
-# Codes used to recognise a Pedestal when no product id allow-list is configured.
-_SIGNATURE_CODES = frozenset({DP.SWITCH, DP.PM25, DP.MODE, DP.FILTER_USED_MINUTES})
+# Bridge model key for this product (docs/bridge-api.md, section 3.1).
+MODEL_PEDESTAL = "pedestal"
+
+# ASSUMPTIONS to confirm on a real device: the console only says "Bool".
+FILTER_STATUS_REPLACE_VALUE = True  # filter_status == True means "replace filter"
+FILTER_COVER_OPEN_VALUE = True  # filter_cover == True means "cover open"
 
 
 class CommandError(ValueError):
@@ -188,13 +187,16 @@ class PedestalState:
     raw: Mapping[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_status(cls, status: Iterable[Mapping[str, Any]]) -> PedestalState:
-        """Build from the ``[{"code": ..., "value": ...}]`` list returned by the cloud."""
+    def from_status(cls, status: Mapping[str, Any] | Iterable[Mapping[str, Any]]) -> PedestalState:
+        """Build from a ``{code: value}`` map (bridge) or ``[{code, value}]`` list (Tuya)."""
         raw: dict[str, Any] = {}
-        for item in status:
-            code = item.get("code")
-            if isinstance(code, str):
-                raw[code] = item.get("value")
+        if isinstance(status, Mapping):
+            raw.update((str(code), value) for code, value in status.items())
+        else:
+            for item in status:
+                code = item.get("code")
+                if isinstance(code, str):
+                    raw[code] = item.get("value")
         return cls(
             power=_to_bool(raw.get(DP.SWITCH)),
             pm25=_to_int(raw.get(DP.PM25)),
@@ -208,6 +210,18 @@ class PedestalState:
             device_error=_to_str(raw.get(DP.DEVICE_ERROR)),
             raw=raw,
         )
+
+    @property
+    def filter_replace_needed(self) -> bool | None:
+        if self.filter_status is None:
+            return None
+        return self.filter_status == FILTER_STATUS_REPLACE_VALUE
+
+    @property
+    def filter_cover_open(self) -> bool | None:
+        if self.filter_cover is None:
+            return None
+        return self.filter_cover == FILTER_COVER_OPEN_VALUE
 
     @property
     def has_fault(self) -> bool | None:
@@ -260,21 +274,3 @@ def reset_filter_command(spec: DeviceSpecification | None = None) -> Command:
     # Assumes a boolean trigger DP; the runtime specification overrides this
     # assumption once a real device has been inspected.
     return _command(DP.RESET_FILTER, True, spec)
-
-
-# ------------------------------------------------------------- identification
-
-
-def is_pedestal(device: Mapping[str, Any], product_ids: Iterable[str] = ()) -> bool:
-    """Return True if a cloud device record looks like a Birdie Pedestal.
-
-    With a product id allow-list (the reliable method), only the product id is
-    checked. Without one, fall back to category + DP signature heuristics.
-    """
-    allowed = set(product_ids)
-    if allowed:
-        return (device.get("product_id") or device.get("productId")) in allowed
-    if device.get("category") != TUYA_CATEGORY_AIR_PURIFIER:
-        return False
-    codes = {item.get("code") for item in device.get("status") or [] if isinstance(item, dict)}
-    return _SIGNATURE_CODES.issubset(codes)

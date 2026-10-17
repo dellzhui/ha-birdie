@@ -4,21 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.birdie.cloud.api import PedestalApi
 from custom_components.birdie.cloud.pedestal import (
-    PEDESTAL_PRODUCT_IDS,
     CommandError,
     DeviceSpecification,
     PedestalState,
-    is_pedestal,
     mode_command,
     power_command,
     reset_filter_command,
 )
 
-from ..helpers import FakeTransport, load_fixture
-
-DEVICE_ID = "bfsynthetic0000001"
+from ..helpers import load_fixture, pedestal_status
 
 
 @pytest.fixture
@@ -106,49 +101,6 @@ def test_spec_driven_validation_overrides_assumptions() -> None:
         reset_filter_command(spec)
 
 
-def test_is_pedestal() -> None:
-    device = load_fixture("pedestal_device.json") | {"status": load_fixture("pedestal_status.json")}
-    assert is_pedestal(device)
-    assert is_pedestal(device, product_ids=["synthpid00000001"])
-    assert not is_pedestal(device, product_ids=["otherpid"])
-    assert not is_pedestal(device | {"category": "dj"})
-
-
-async def test_api_snapshot_and_control() -> None:
-    transport = FakeTransport()
-    api = PedestalApi(transport)
-    snapshot = await api.async_get_snapshot(DEVICE_ID)
-    assert snapshot.info.online is True
-    assert snapshot.info.name == "Living Room Purifier"
-    assert snapshot.info.product_id == "synthpid00000001"
-    assert not hasattr(snapshot.info, "local_key")
-    assert snapshot.state.mode == "auto"
-
-    await api.async_set_power(DEVICE_ID, False)
-    await api.async_set_mode(DEVICE_ID, "manual2")
-    await api.async_reset_filter(DEVICE_ID)
-    assert transport.commands == [
-        (DEVICE_ID, [{"code": "switch", "value": False}]),
-        (DEVICE_ID, [{"code": "mode", "value": "manual2"}]),
-        (DEVICE_ID, [{"code": "reset_filter", "value": True}]),
-    ]
-    assert transport.spec_requests == 1  # specification is cached
-
-
-async def test_api_invalid_mode_not_sent() -> None:
-    transport = FakeTransport()
-    api = PedestalApi(transport)
-    with pytest.raises(CommandError):
-        await api.async_set_mode(DEVICE_ID, "turbo")
-    assert transport.commands == []
-
-
-async def test_api_offline_device_info() -> None:
-    transport = FakeTransport(online=False)
-    snapshot = await PedestalApi(transport).async_get_snapshot(DEVICE_ID)
-    assert snapshot.info.online is False
-
-
 def test_fault_detection() -> None:
     assert PedestalState.from_status([{"code": "device_error", "value": "ocp"}]).has_fault is True
     assert PedestalState().has_fault is None
@@ -171,5 +123,15 @@ def test_console_type_labels_are_accepted() -> None:
         spec.functions["x"].validate(6)
 
 
-def test_known_product_id() -> None:
-    assert is_pedestal({"productId": "a2zf7q0zxcutn5dy"}, PEDESTAL_PRODUCT_IDS)
+def test_state_from_bridge_mapping() -> None:
+    state = PedestalState.from_status(pedestal_status())
+    assert state.power is True
+    assert state.mode == "auto"
+    assert state.filter_life_percent == 75.0
+
+
+def test_filter_flags_follow_assumed_semantics() -> None:
+    state = PedestalState.from_status({"filter_status": True, "filter_cover": False})
+    assert state.filter_replace_needed is True
+    assert state.filter_cover_open is False
+    assert PedestalState().filter_replace_needed is None

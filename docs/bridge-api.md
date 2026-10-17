@@ -115,7 +115,23 @@ example right after pairing. Unknown DPs must be ignored by the client.
 
 No authentication. Returns `200 {"status": "ok"}` for uptime monitoring.
 
-### 4.2 `GET /v1/devices`
+### 4.2 `GET /v1/account`
+
+Identifies the signed-in account. Clients use `id` to avoid adding the same
+account twice and to match re-authentication to the right config entry.
+
+Response `200`:
+
+```json
+{ "id": "a1b2c3d4e5f6", "display_name": "jane@example.com" }
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Opaque, stable per Birdie account. Not the Tuya UID. |
+| `display_name` | string or null | Optional human-readable label (e.g. e-mail) for the config entry title. |
+
+### 4.3 `GET /v1/devices`
 
 Lists the signed-in user's supported Birdie devices. Devices of unsupported
 products are omitted.
@@ -148,7 +164,7 @@ Response `200`:
 `GET /v1/devices?include=status` is the **polling endpoint**: one request
 returns everything Home Assistant needs for all of a user's devices.
 
-### 4.3 `GET /v1/devices/{device_id}`
+### 4.4 `GET /v1/devices/{device_id}`
 
 One device with its status. Same object as an element of
 `GET /v1/devices?include=status`.
@@ -156,7 +172,7 @@ One device with its status. Same object as an element of
 Errors: `404 device_not_found` if the device does not exist **or** does not
 belong to the user (the bridge does not reveal which).
 
-### 4.4 `GET /v1/devices/{device_id}/specification`
+### 4.5 `GET /v1/devices/{device_id}/specification`
 
 The device's data point specification, used by the client to validate
 commands. Changes only with firmware/product updates; clients should cache it
@@ -184,7 +200,7 @@ Response `200`:
 JSON object (the bridge decodes Tuya's JSON-in-a-string encoding). `type` uses
 Tuya's names: `Boolean`, `Integer`, `Enum`, `String`, `Json`, `Raw`, `Bitmap`.
 
-### 4.5 `POST /v1/devices/{device_id}/commands`
+### 4.6 `POST /v1/devices/{device_id}/commands`
 
 Sends one or more DP commands. Request:
 

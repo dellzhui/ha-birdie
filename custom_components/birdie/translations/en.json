@@ -1,28 +1,129 @@
 {
   "config": {
     "abort": {
-      "already_configured": "This Birdie device is already configured.",
-      "not_supported": "The discovered Bluetooth device is not a supported Birdie device."
+      "already_configured": "This Birdie device or account is already configured.",
+      "not_supported": "The discovered Bluetooth device is not a supported Birdie device.",
+      "reauth_successful": "Re-authentication was successful.",
+      "wrong_account": "The new access token belongs to a different Birdie account."
     },
     "error": {
-      "no_devices_found": "No Birdie devices were discovered. You can still add one manually by entering its Bluetooth address."
+      "no_devices_found": "No Birdie devices were discovered. You can still add one manually by entering its Bluetooth address.",
+      "invalid_url": "Enter a valid http:// or https:// URL.",
+      "invalid_auth": "The access token was rejected.",
+      "cannot_connect": "Unable to reach the Birdie cloud service."
     },
     "progress": {
       "scan": "Scanning for Birdie Bluetooth devices..."
     },
     "step": {
+      "user": {
+        "title": "Add Birdie",
+        "description": "Choose how to add your Birdie product.",
+        "menu_options": {
+          "ble": "Bluetooth device (Birdie Pro)",
+          "cloud": "Birdie account (Wi-Fi devices such as Birdie Pedestal)"
+        }
+      },
       "bluetooth_confirm": {
         "title": "Add Birdie device",
         "description": "Add {name} to Home Assistant?"
       },
-      "user": {
+      "ble": {
         "title": "Add Birdie device",
         "description": "Select a discovered Birdie device, or enter the Bluetooth address manually.",
         "data": {
           "address": "Bluetooth address",
           "name": "Name"
         }
+      },
+      "cloud": {
+        "title": "Add Birdie account",
+        "description": "Connect the Wi-Fi Birdie devices of your Birdie account.",
+        "data": {
+          "bridge_url": "Birdie cloud URL",
+          "access_token": "Access token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Birdie account",
+        "description": "The access token for {account} is no longer valid. Enter a new one.",
+        "data": {
+          "access_token": "Access token"
+        }
       }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "filter_replacement": {
+        "name": "Filter replacement"
+      },
+      "filter_cover": {
+        "name": "Filter cover"
+      }
+    },
+    "button": {
+      "reset_filter": {
+        "name": "Reset filter"
+      }
+    },
+    "fan": {
+      "purifier": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto": "Auto",
+              "sleep": "Sleep"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "air_quality": {
+        "name": "Air quality",
+        "state": {
+          "good": "Good",
+          "moderate": "Moderate",
+          "poor": "Poor",
+          "very_poor": "Very poor"
+        }
+      },
+      "filter_life": {
+        "name": "Filter life"
+      },
+      "filter_remaining": {
+        "name": "Filter time remaining"
+      },
+      "device_status": {
+        "name": "Device status",
+        "state": {
+          "normal": "Normal",
+          "fan": "Fan fault",
+          "pm25": "PM2.5 sensor fault",
+          "ocp": "Overcurrent protection"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "The Birdie account needs to be re-authenticated."
+    },
+    "device_offline": {
+      "message": "The device is offline."
+    },
+    "device_not_found": {
+      "message": "The device is no longer part of this Birdie account."
+    },
+    "command_rejected": {
+      "message": "The device rejected the command."
+    },
+    "invalid_command": {
+      "message": "Invalid command: {error}"
+    },
+    "cloud_error": {
+      "message": "Birdie cloud request failed: {error}"
     }
   }
 }
