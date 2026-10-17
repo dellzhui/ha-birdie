@@ -252,6 +252,8 @@ Every error uses this body:
 | 404 | `device_not_found` | Unknown device, or not the user's | Mark device unavailable; the next device list sync removes it |
 | 409 | `device_offline` | Command sent to an offline device | Show "device offline" to the user; not a polling failure |
 | 422 | `command_rejected` | DP not allowed, value invalid, or rejected by the device | Show error; do not retry |
+| 404 | `not_found` | Unknown endpoint | Bug or version mismatch; log |
+| 405 | `method_not_allowed` | Wrong HTTP method | Bug; log |
 | 429 | `rate_limited` | Too many requests from this user | Back off for `Retry-After` seconds |
 | 502 | `upstream_error` | Tuya returned an unexpected error | Treat as transient polling failure |
 | 503 | `upstream_unavailable` | Tuya unreachable, or Birdie's Tuya plan/quota problem | Treat as transient; respect `Retry-After` if present |
@@ -279,6 +281,10 @@ Every error uses this body:
   a successful command invalidates that device's cache. Prefer Tuya calls that
   return status for several devices at once.
 * **Rate limiting:** per user, e.g. 60 requests per minute (tunable).
+* **Implementation note:** the reference bridge reads a user's devices and
+  their status in one Tuya call (`GET /v1.0/users/{uid}/devices`, a legacy
+  but still documented API). If Tuya retires it, only
+  `BridgeService._user_devices` needs to change.
 * **Error mapping from Tuya:**
 
   | Tuya condition | Bridge response |

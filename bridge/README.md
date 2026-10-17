@@ -17,8 +17,9 @@ See `../docs/architecture.md` for the reasoning.
 |---|---|
 | Tuya Cloud OpenAPI client (`birdie_bridge.tuya`) | Implemented; tested against an in-process fake cloud and Tuya's documented signing vectors |
 | Developer CLI (`birdie-tuya`) | Implemented |
-| HTTP API for Home Assistant | Not started |
-| User authentication | Not started - depends on how the Birdie app signs users in |
+| HTTP API (`birdie_bridge.app`, docs/bridge-api.md) | Implemented: ownership scoping, product allow-list, command allow-list, status/spec caching, per-account rate limit, Tuya error mapping |
+| Development authentication (static tokens) | Implemented, development mode only |
+| Production authentication | Not started - depends on how the Birdie app signs users in |
 
 Nothing here has been run against a real Birdie Pedestal yet.
 
@@ -26,9 +27,15 @@ Nothing here has been run against a real Birdie Pedestal yet.
 
 ```
 birdie_bridge/
-  tuya/        Tuya Cloud OpenAPI client: signing, token lifecycle, typed errors
-  devtool.py   CLI for probing a Tuya cloud project
-tests/         pytest suite; fake_tuya.py is an in-process fake of the OpenAPI
+  app.py        aiohttp application: routes, error envelope, auth, rate limit
+  service.py    business logic: per-user device scoping, caching, validation
+  products.py   Tuya PID -> Birdie model map and command allow-lists
+  auth.py       authenticators (development tokens today)
+  tuya/         Tuya Cloud OpenAPI client: signing, token lifecycle, typed errors
+  devtool.py    CLI for probing a Tuya cloud project
+  __main__.py   server entry point (python -m birdie_bridge)
+tests/          pytest suite; fake_tuya.py is an in-process fake of the OpenAPI,
+                test_contract.py runs the Home Assistant client against the bridge
 ```
 
 ## Development
@@ -40,6 +47,24 @@ python3 -m venv .venv
 .venv/bin/pip install -e 'bridge[dev]'
 cd bridge && ../.venv/bin/pytest
 ```
+
+## Running the bridge locally
+
+```bash
+set -a; . bridge/.env.local; set +a          # TUYA_* credentials
+export BRIDGE_ENV=development
+export BRIDGE_DEV_TOKENS='<pick-a-random-token>=<tuya_uid_of_test_user>'
+export BRIDGE_EXTRA_PRODUCTS='<clone_pid>=pedestal'   # only for a cloned test product
+.venv/bin/python -m birdie_bridge            # listens on 127.0.0.1:8080
+```
+
+Then in Home Assistant add **Birdie > Birdie account** with URL
+`http://<host>:8080` and the development token. Development tokens are
+refused unless `BRIDGE_ENV=development`; there is no production
+authenticator yet, so the bridge cannot be deployed for real users.
+
+The Tuya UID of a test user can be found with `birdie-tuya device <id>` on
+one of their devices (field `uid`) or in the Tuya console.
 
 ## Developer CLI
 

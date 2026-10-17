@@ -49,6 +49,7 @@ class FakeDevice:
     details: dict[str, Any]
     status: list[dict[str, Any]]
     spec: dict[str, Any]
+    owner_uid: str = "synthuser0001"
 
     @property
     def online(self) -> bool:
@@ -67,14 +68,24 @@ class FakeTuyaCloud:
     request_log: list[str] = field(default_factory=list)
     force_error: dict[str, tuple[int, str]] = field(default_factory=dict)
 
-    def add_pedestal(self, device_id: str = "bfsynthetic0000001", online: bool = True) -> None:
+    def add_pedestal(
+        self,
+        device_id: str = "bfsynthetic0000001",
+        online: bool = True,
+        *,
+        owner_uid: str = "synthuser0001",
+        product_id: str | None = None,
+    ) -> None:
         details = load_fixture("pedestal_device.json")
         details["id"] = device_id
         details["is_online"] = online
+        if product_id:
+            details["product_id"] = product_id
         self.devices[device_id] = FakeDevice(
             details=details,
             status=load_fixture("pedestal_status.json"),
             spec=load_fixture("pedestal_specification.json"),
+            owner_uid=owner_uid,
         )
 
     def expire_all_tokens(self) -> None:
@@ -157,6 +168,26 @@ class FakeTuyaCloud:
                     {"id": i, "status": copy.deepcopy(self.devices[i].status)}
                     for i in ids
                     if i in self.devices
+                ]
+            )
+        # /v1.0/users/{uid}/devices (legacy shape: snake_case, "online", embedded status)
+        if parts[:2] == ["v1.0", "users"] and len(parts) == 4 and parts[3] == "devices":
+            return self._ok(
+                [
+                    {
+                        "id": device_id,
+                        "name": device.details.get("custom_name") or device.details["name"],
+                        "uid": device.owner_uid,
+                        "product_id": device.details["product_id"],
+                        "product_name": device.details["product_name"],
+                        "category": device.details["category"],
+                        "online": device.online,
+                        "local_key": device.details["local_key"],
+                        "ip": device.details["ip"],
+                        "status": copy.deepcopy(device.status),
+                    }
+                    for device_id, device in self.devices.items()
+                    if device.owner_uid == parts[2]
                 ]
             )
         # /v2.0/cloud/thing/{id}
