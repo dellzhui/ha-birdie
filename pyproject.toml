@@ -1,0 +1,15 @@
+# Tooling configuration only. The Home Assistant integration itself is
+# distributed from custom_components/birdie; the bridge has its own
+# pyproject.toml under bridge/.
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "ASYNC", "RUF"]

@@ -33,3 +33,8 @@ __pycache__/
 # Local packaging artifacts
 *.tgz
 *.zip
+
+# Local virtual environment and credentials
+.venv/
+!.env.example
+*.egg-info/

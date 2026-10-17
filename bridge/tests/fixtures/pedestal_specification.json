@@ -1,0 +1,21 @@
+{
+  "category": "kj",
+  "functions": [
+    {"code": "switch", "type": "Boolean", "values": "{}"},
+    {"code": "mode", "type": "Enum", "values": "{\"range\":[\"auto\",\"sleep\",\"manual1\",\"manual2\",\"manual3\",\"manual4\"]}"},
+    {"code": "reset_filter", "type": "Boolean", "values": "{}"}
+  ],
+  "status": [
+    {"code": "switch", "type": "Boolean", "values": "{}"},
+    {"code": "pm25", "type": "Integer", "values": "{\"unit\":\"ug/m3\",\"min\":0,\"max\":500,\"scale\":0,\"step\":1}"},
+    {"code": "mode", "type": "Enum", "values": "{\"range\":[\"auto\",\"sleep\",\"manual1\",\"manual2\",\"manual3\",\"manual4\"]}"},
+    {"code": "air_quality", "type": "Enum", "values": "{\"range\":[\"good\",\"moderate\",\"poor\",\"very_poor\"]}"},
+    {"code": "filter_total_minutes", "type": "Integer", "values": "{\"unit\":\"minutes\",\"min\":0,\"max\":129600,\"scale\":0,\"step\":1}"},
+    {"code": "filter_used_minutes", "type": "Integer", "values": "{\"unit\":\"minutes\",\"min\":0,\"max\":129600,\"scale\":0,\"step\":1}"},
+    {"code": "filter_status", "type": "Boolean", "values": "{}"},
+    {"code": "reset_filter", "type": "Boolean", "values": "{}"},
+    {"code": "filter_cover", "type": "Boolean", "values": "{}"},
+    {"code": "hw_version", "type": "String", "values": "{}"},
+    {"code": "device_error", "type": "Enum", "values": "{\"range\":[\"normal\",\"fan\",\"pm25\",\"ocp\"]}"}
+  ]
+}

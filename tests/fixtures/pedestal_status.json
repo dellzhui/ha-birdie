@@ -1,0 +1,13 @@
+[
+  {"code": "switch", "value": true},
+  {"code": "pm25", "value": 12},
+  {"code": "mode", "value": "auto"},
+  {"code": "air_quality", "value": "good"},
+  {"code": "filter_total_minutes", "value": 129600},
+  {"code": "filter_used_minutes", "value": 32400},
+  {"code": "filter_status", "value": false},
+  {"code": "reset_filter", "value": false},
+  {"code": "filter_cover", "value": false},
+  {"code": "hw_version", "value": "1.0.0"},
+  {"code": "device_error", "value": "normal"}
+]
