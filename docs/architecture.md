@@ -128,24 +128,22 @@ LAN in the 2026-10-26 probe (protocol 3.4, hardware version HW1.0.0, one unit).
 | DP | Code | Schema | Entity | Real device |
 |---|---|---|---|---|
 | 1 | switch | bool, rw | Fan on/off | Reported; on/off writes work; app changes pushed |
-| 2 | pm25 | value 0-500 ug/m3, ro | PM2.5 sensor | Reported (int); stayed at 1 while DP 111 reported a PM2.5 sensor fault |
+| 2 | pm25 | value 0-500 ug/m3, ro | PM2.5 sensor | Reported (int); stayed at 1 on a unit with a broken sensor (DP 111 `pm25`), so the integration shows PM2.5 and air quality as unknown during that fault |
 | 3 | mode | enum auto/sleep/manual1-4, rw | Fan presets (auto, sleep) and speed (manual1-4 = 25-100 %) | Reported; every value written and confirmed; app changes pushed |
 | 21 | air_quality | enum, ro | Air quality sensor | Reported; only `good` seen |
 | 105 | filter_total_minutes | value, ro | Filter life %, time remaining | Reported: 129600 (90 days) |
 | 106 | filter_used_minutes | value, ro | Filter life %, time remaining | Reported; counts up while running, pushed every minute |
 | 107 | filter_status | bool, ro | Filter replacement (assumed true = replace) | Reported: false at 90 % filter life |
 | 108 | reset_filter | bool, rw | Reset filter button (assumed: write true) | Not reported; not tested |
-| 109 | filter_cover | bool, ro | Filter cover (false = open) | Reported: true normally, false for a few seconds while the cover was opened |
+| 109 | filter_cover | bool, ro | Filter cover (false = open) | Reported: true normally, false while the cover was open (confirmed by Birdie) |
 | 110 | hw_version | string, ro | Device hardware version | Reported: `HW1.0.0` |
-| 111 | device_error | enum normal/fan/pm25/ocp, ro | Device status sensor | Reported: `pm25` throughout (see open points) |
+| 111 | device_error | enum normal/fan/pm25/ocp, ro | Device status sensor | Reported: `pm25` throughout; that unit's PM2.5 sensor is broken (confirmed by Birdie) |
 
 ## Open points
 
 | Topic | Owner |
 |---|---|
 | Can the Birdie app show the device ID and local key? (Birdie's app developer is checking) | Birdie |
-| The test unit reports device_error `pm25` and PM2.5 = 1: real sensor fault on that unit, or does the value mean something else? | Birdie |
-| filter_cover: confirm false = open | Birdie |
 | filter_status true when a replacement is due, reset_filter behaviour, air_quality values other than `good` | Birdie / later test |
 | Product ID in the purifier's LAN broadcast (the probe was run with a fixed IP address, so discovery was not recorded) | Birdie / later test |
 | Home Assistant on Birdie's network: key change, IP change, power loss, app and Home Assistant connected together | Later test |

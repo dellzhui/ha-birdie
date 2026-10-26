@@ -61,8 +61,8 @@ another Birdie purifier that appears on the network is offered under
 | Entity | Type | Notes |
 | --- | --- | --- |
 | Purifier | Fan | On/off, speeds 1-4 as 25/50/75/100 %, presets **Auto** and **Sleep** |
-| PM2.5 | Sensor | ug/m3 |
-| Air quality | Sensor | Good, Moderate, Poor, Very poor |
+| PM2.5 | Sensor | ug/m3; unknown while the purifier reports a PM2.5 sensor fault |
+| Air quality | Sensor | Good, Moderate, Poor, Very poor; unknown during a PM2.5 sensor fault |
 | Filter life | Sensor | Remaining filter life in % |
 | Filter time remaining | Sensor | Remaining filter time |
 | Filter replacement | Binary sensor | On when the filter should be replaced |
@@ -151,6 +151,7 @@ Birdie app are not affected.
 | "Cannot connect to the air purifier" | The purifier is on and on Wi-Fi; the IP address is correct; TCP port 6668 is reachable from Home Assistant (firewall, VLAN rules, guest Wi-Fi isolation). Close other local Tuya integrations for this purifier (Tuya Local, LocalTuya, a Homey Tuya Local app): the purifier accepts only a few local connections. |
 | "The air purifier did not accept the local key" | Copy the current key from the Birdie app again; it changes when the purifier is set up again. It has exactly 16 characters and is case-sensitive. If the key is certainly right, choose the protocol version under **Advanced**. |
 | Entities are unavailable | The purifier is off at the mains, offline, or has a new IP address (see above). Home Assistant reconnects on its own, retrying every 5 to 60 seconds. If a re-authentication notice appears, enter the new key. |
+| PM2.5 and Air quality show "unknown" | Device status shows "PM2.5 sensor fault": the purifier's sensor does not work; contact Birdie support. |
 | One entity stays unavailable | The purifier has not reported that value (see [Entities](#entities)). Send diagnostics. |
 | Setting a speed or preset fails with "has not reported its operating mode" | The purifier did not report its mode; on/off still works. Send diagnostics. |
 | The Birdie app or another controller loses the purifier while Home Assistant is connected | Please report it; this has not been tested on a real purifier yet. |

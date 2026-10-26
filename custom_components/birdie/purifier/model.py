@@ -57,13 +57,13 @@ _FAULTS_BY_DP: Mapping[str, str] = {
 }
 FAULTS: tuple[str, ...] = tuple(_FAULTS_BY_DP.values())
 FAULT_NONE = "none"
+FAULT_PM25_SENSOR = "pm25_sensor"
 
 # The console only says "Bool" for these.
 # ASSUMPTION: filter_status == True means "replace filter" (false seen with 90 % left).
 FILTER_STATUS_REPLACE_VALUE = True
-# Observed: filter_cover is true in normal operation and turned false while the
-# cover was opened during the probe, so false means "cover open" (to be
-# confirmed by Birdie).
+# Observed and confirmed by Birdie: filter_cover is true in normal operation
+# and false while the cover is open.
 FILTER_COVER_OPEN_VALUE = False
 # ASSUMPTION: reset_filter is a trigger written as true (not tested; the
 # device does not report DP 108).
@@ -138,20 +138,27 @@ class PurifierState:
             if total is not None and total > 0 and remaining is not None
             else None
         )
-        fault = dps.get(DP_DEVICE_ERROR)
+        error = dps.get(DP_DEVICE_ERROR)
+        fault = _FAULTS_BY_DP.get(error) if isinstance(error, str) else None
         hardware = dps.get(DP_HW_VERSION)
+        # With a broken PM2.5 sensor the device keeps reporting a meaningless
+        # PM2.5 value (1 on a real unit) and an air quality presumably derived
+        # from it; show both as unknown instead.
+        sensor_ok = fault != FAULT_PM25_SENSOR
         return cls(
             power=_to_bool(dps.get(DP_SWITCH)),
             mode=mode,
             fan_speed=fan_speed,
-            pm25=_to_int(dps.get(DP_PM25)),
-            air_quality=_known(dps.get(DP_AIR_QUALITY), AIR_QUALITY_LEVELS),
+            pm25=_to_int(dps.get(DP_PM25)) if sensor_ok else None,
+            air_quality=(
+                _known(dps.get(DP_AIR_QUALITY), AIR_QUALITY_LEVELS) if sensor_ok else None
+            ),
             filter_life_percent=life,
             filter_remaining_minutes=remaining,
             filter_replace_needed=_flag(dps.get(DP_FILTER_STATUS), FILTER_STATUS_REPLACE_VALUE),
             filter_cover_open=_flag(dps.get(DP_FILTER_COVER), FILTER_COVER_OPEN_VALUE),
             hardware_version=str(hardware) if isinstance(hardware, str) and hardware else None,
-            fault=_FAULTS_BY_DP.get(fault) if isinstance(fault, str) else None,
+            fault=fault,
             dps=dict(dps),
         )
 

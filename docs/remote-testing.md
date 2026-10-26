@@ -69,13 +69,13 @@ redacted).
 | 4 | Changes made in the app arrive as pushes within a few seconds | Pass (mode, power, filter cover) |
 | 5 | Power off/on from the probe / Home Assistant | Pass (probe) |
 | 6 | Modes auto, sleep and speeds manual1-4 | Pass (probe), each confirmed in ~0.3 s |
-| 7 | PM2.5 value plausible, unit/scale | Open: stayed at 1 while DP 111 reported `pm25` |
+| 7 | PM2.5 value plausible, unit/scale | Not checked: that unit's PM2.5 sensor is broken (value stays 1) |
 | 8 | air_quality values seen: ___ | `good` only |
 | 9 | filter_total/used minutes plausible; filter life % matches the app | Plausible (129600 / 13311 min = 90 %); app value not compared |
 | 10 | filter_status value when a replacement is due (if it can be triggered) | Not triggered (false at 90 %) |
-| 11 | filter_cover value with the cover open | false while opened, true otherwise (to be confirmed) |
+| 11 | filter_cover value with the cover open | false while open, true when closed (Birdie app showed the same) |
 | 12 | reset_filter: accepted? counter reset? (only with consent) | Not tested |
-| 13 | device_error values (if a fault can be simulated) | `pm25` throughout the test |
+| 13 | device_error values (if a fault can be simulated) | `pm25` throughout: that unit's PM2.5 sensor is broken |
 | 14 | Unplug the purifier: entities unavailable; plug in: back without restart | |
 | 15 | Pair the purifier again in the app: Home Assistant asks for the new key, works after entering it | |
 | 16 | Birdie app still works while Home Assistant is connected | App changes worked while the probe was connected |

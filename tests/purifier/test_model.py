@@ -50,12 +50,18 @@ REAL_DEVICE_DPS = {
 }
 
 
+def test_pm25_values_with_a_working_sensor() -> None:
+    state = PurifierState.from_dps({**REAL_DEVICE_DPS, "2": 8, "111": "normal"})
+    assert state.pm25 == 8
+    assert state.air_quality == "good"
+
+
 def test_state_from_real_device_report() -> None:
     state = PurifierState.from_dps(REAL_DEVICE_DPS)
     assert state.power is True
     assert state.mode == "auto"
-    assert state.pm25 == 1
-    assert state.air_quality == "good"
+    assert state.pm25 is None  # sensor broken on that unit (DP 111 "pm25")
+    assert state.air_quality is None
     assert state.filter_life_percent == 90
     assert state.filter_remaining_minutes == 116289
     assert state.filter_replace_needed is False
