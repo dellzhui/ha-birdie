@@ -30,8 +30,8 @@ FILES = [
 ]
 
 README = """\
-Birdie Air Purifier probe {version}
-==================================
+Birdie Podium probe {version}
+============================
 
 This tool checks a Birdie air purifier over the local network and writes a
 report for the developers. It does not need Home Assistant. Run it on a

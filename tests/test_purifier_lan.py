@@ -95,7 +95,7 @@ async def test_control_and_reconnect(hass: HomeAssistant, device: FakeTuyaDevice
     await wait_for(hass, lambda: device.dps["3"] == "manual1")
 
     await device.push({"2": 55})
-    await wait_for(hass, lambda: hass.states.get("sensor.birdie_air_purifier_pm2_5").state == "55")
+    await wait_for(hass, lambda: hass.states.get("sensor.birdie_podium_pm2_5").state == "55")
 
     device.silent = True  # hangs: heartbeats go unanswered
     await wait_for(hass, lambda: hass.states.get(FAN).state == STATE_UNAVAILABLE)

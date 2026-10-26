@@ -1,11 +1,10 @@
-# Architecture: Birdie Air Purifier in Home Assistant
+# Architecture: Birdie Podium Air Purifier in Home Assistant
 
 Status: local LAN control selected (2026-10-26); first real-device probe 2026-10-26. Last reviewed 2026-10-26.
 
-The purifier is a Tuya-based Wi-Fi device. Birdie calls it "Pedestal" in its
-Tuya console and "Podium" in its Homey work; the integration uses the neutral
-name "Birdie Air Purifier" until the product name is confirmed
-(`purifier/model.py`, `MODEL_NAME`).
+The purifier is a Tuya-based Wi-Fi device named **Podium** (confirmed by
+Birdie). "Pedestal" was its development name and is still used in the Tuya
+console and on early units (`purifier/model.py`, `MODEL_NAME`).
 
 ## Decision
 
@@ -147,8 +146,8 @@ LAN in the 2026-10-26 probe (protocol 3.4, hardware version HW1.0.0, one unit).
 
 | Topic | Owner |
 |---|---|
-| Can the Birdie app show the device ID and local key? (Birdie's app developer is checking) | Birdie |
+| The Birdie app showing the local key to users (Birdie's app team is working on it) | Birdie |
 | filter_status true when a replacement is due, reset_filter behaviour, air_quality values other than `good` | Birdie / later test |
 | Product ID in the purifier's LAN broadcast (the probe was run with a fixed IP address, so discovery was not recorded) | Birdie / later test |
 | Home Assistant on Birdie's network: key change, IP change, power loss, app and Home Assistant connected together | Later test |
-| Final product name (Pedestal / Podium) and whether other product IDs exist | Birdie |
+| Whether other product IDs exist besides `a2zf7q0zxcutn5dy` | Birdie |

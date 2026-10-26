@@ -104,7 +104,7 @@ async def test_discovered_purifier(
         result["flow_id"], {CONF_LOCAL_KEY: f" {LOCAL_KEY} "}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Birdie Air Purifier"
+    assert result["title"] == "Birdie Podium"
     assert result["result"].unique_id == DEVICE_ID
     assert result["data"] == purifier_entry_data(**{CONF_DETECTED_VERSION: "3.4"})
     assert fake_lan.devices[-1].version_hint == "3.4"

@@ -98,8 +98,8 @@ async def test_entities_and_device(hass: HomeAssistant, entry, fake_lan: FakeLan
     (device,) = dr.async_entries_for_config_entry(registry, entry.entry_id)
     assert device.identifiers == {(DOMAIN, DEVICE_ID)}
     assert device.manufacturer == "Birdie"
-    assert device.model == "Air Purifier"
-    assert device.name == "Birdie Air Purifier"
+    assert device.model == "Podium"
+    assert device.name == "Birdie Podium"
     assert device.hw_version == "1.2"
 
 

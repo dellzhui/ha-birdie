@@ -1,4 +1,4 @@
-# Testing With a Real Birdie Air Purifier
+# Testing With a Real Birdie Podium
 
 A first probe ran on a real purifier on 2026-10-26 (results in the checklist
 below); Home Assistant itself has run against a simulated purifier only. The LAN
@@ -61,7 +61,7 @@ Preferably use a purifier with a working PM2.5 sensor.
    `config/custom_components` folder. Restart Home Assistant.
 2. Close other local controllers of the purifier (Homey Tuya Local, the
    probe tool).
-3. **Add integration > Birdie > Air purifier (Wi-Fi, local network)**. Home
+3. **Add integration > Birdie > Podium air purifier (Wi-Fi, local network)**. Home
    Assistant OS and host-network Docker installs should list the purifier
    (checklist item 1); otherwise choose manual entry and give the IP address.
 4. Work through checklist items 5-9 and 14-17 from Home Assistant.

@@ -19,7 +19,7 @@
     },
     "progress": {
       "scan": "Scanning for Birdie Bluetooth devices...",
-      "lan_scan": "Searching the local network for Birdie air purifiers..."
+      "lan_scan": "Searching the local network for Birdie Podium air purifiers..."
     },
     "step": {
       "user": {
@@ -27,7 +27,7 @@
         "description": "Choose which Birdie product to add.",
         "menu_options": {
           "ble": "Bluetooth device (Birdie Pro)",
-          "purifier": "Air purifier (Wi-Fi, local network)"
+          "purifier": "Podium air purifier (Wi-Fi, local network)"
         }
       },
       "bluetooth_confirm": {
@@ -43,21 +43,21 @@
         }
       },
       "purifier_pick": {
-        "title": "Add Birdie air purifier",
-        "description": "These Birdie air purifiers were found on your network.",
+        "title": "Add Birdie Podium",
+        "description": "These Birdie Podium air purifiers were found on your network.",
         "data": {
           "device_id": "Air purifier"
         }
       },
       "purifier_key": {
-        "title": "Add Birdie air purifier",
+        "title": "Add Birdie Podium",
         "description": "Enter the local key of the air purifier with device ID {device_id} ({host}). Copy it from the Birdie app.",
         "data": {
           "local_key": "Local key"
         }
       },
       "purifier_manual": {
-        "title": "Add Birdie air purifier",
+        "title": "Add Birdie Podium",
         "description": "Enter the device ID and local key shown in the Birdie app. Leave the IP address empty to search the local network.",
         "data": {
           "device_id": "Device ID",
@@ -82,7 +82,7 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Birdie air purifier",
+        "title": "Reconfigure Birdie Podium",
         "description": "Change the connection settings of device ID {device_id}. Leave the local key empty to keep the current one.",
         "data": {
           "local_key": "Local key",

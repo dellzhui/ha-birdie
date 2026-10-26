@@ -31,8 +31,8 @@ LOCAL_KEY = "0123456789abcdef"
 NEW_KEY = "fedcba9876543210"
 HOST = "192.168.1.40"
 PRODUCT_KEY = "a2zf7q0zxcutn5dy"
-TITLE = "Birdie Air Purifier"
-FAN = "fan.birdie_air_purifier"
+TITLE = "Birdie Podium"
+FAN = "fan.birdie_podium"
 
 # Synthetic DP values shaped like a real purifier's report (same DPs and
 # types; DP 108 is never reported).

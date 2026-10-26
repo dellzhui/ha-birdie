@@ -1,4 +1,4 @@
-# Birdie Air Purifier
+# Birdie Podium Air Purifier
 
 Home Assistant controls the Birdie Wi-Fi air purifier directly over your local
 network. No cloud service, Tuya account or Birdie sign-in is involved: you
@@ -39,7 +39,7 @@ logs and diagnostics.
 ## Add the purifier
 
 1. **Settings > Devices & services > Add integration > Birdie**.
-2. Choose **Air purifier (Wi-Fi, local network)**. Home Assistant searches
+2. Choose **Podium air purifier (Wi-Fi, local network)**. Home Assistant searches
    the network for a few seconds.
 3. Then either:
    * **The purifier is listed:** select it and enter its **local key**.
@@ -94,25 +94,25 @@ automation:
   - alias: "Purifier: auto mode when the air gets worse"
     triggers:
       - trigger: numeric_state
-        entity_id: sensor.birdie_air_purifier_pm2_5
+        entity_id: sensor.birdie_podium_pm2_5
         above: 35
         for: "00:05:00"
     actions:
       - action: fan.set_preset_mode
         target:
-          entity_id: fan.birdie_air_purifier
+          entity_id: fan.birdie_podium
         data:
           preset_mode: auto
 
   - alias: "Purifier: filter reminder"
     triggers:
       - trigger: state
-        entity_id: binary_sensor.birdie_air_purifier_filter_replacement
+        entity_id: binary_sensor.birdie_podium_filter_replacement
         to: "on"
     actions:
       - action: persistent_notification.create
         data:
-          message: "The Birdie air purifier filter should be replaced."
+          message: "The Birdie Podium filter should be replaced."
 ```
 
 ## When the local key changes

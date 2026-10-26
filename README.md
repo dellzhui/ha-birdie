@@ -41,12 +41,12 @@ approved, add this repository manually in HACS.
 | CO2 threshold | Number | ppm | Writable, 400-5000 ppm |
 | Cool down period | Number | min | Writable, 1-240 min |
 
-## Birdie Air Purifier (In Development)
+## Birdie Podium Air Purifier (In Development)
 
-The Wi-Fi air purifier is controlled directly over the local network. No
+The Birdie Podium Wi-Fi air purifier is controlled directly over the local network. No
 cloud service, Tuya account or Birdie sign-in is involved: copy the purifier's
 **device ID** and **local key** from the Birdie app, then add it with
-**Add integration > Birdie > Air purifier (Wi-Fi, local network)**. Home
+**Add integration > Birdie > Podium air purifier (Wi-Fi, local network)**. Home
 Assistant finds the purifier on the network, or you enter its IP address.
 
 Entities: fan (on/off, 4 speeds, presets `auto` and `sleep`), PM2.5, air

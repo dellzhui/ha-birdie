@@ -2,7 +2,8 @@
 
 This is the only place that knows the purifier's data points (DPs). DP ids,
 codes, types and ranges come from the product definition in Birdie's Tuya
-Developer console (product "Birdie Pedestal", PID a2zf7q0zxcutn5dy).
+Developer console (product "Birdie Pedestal", the development name of the
+Podium; PID a2zf7q0zxcutn5dy).
 
 Observed on a real purifier over the LAN (protocol 3.4, firmware HW1.0.0,
 2026-10-26 probe; docs/remote-testing.md): DPs 1, 2, 3, 21, 105, 106, 107,
@@ -20,9 +21,9 @@ from typing import Any
 # Tuya product ids of supported purifiers (the "productKey" in LAN broadcasts).
 PRODUCT_KEYS: frozenset[str] = frozenset({"a2zf7q0zxcutn5dy"})
 
-# The customer has called the product both "Pedestal" and "Podium"; the
-# user-facing name stays neutral until Birdie confirms it.
-MODEL_NAME = "Air Purifier"
+# Birdie confirmed the product name "Podium" (2026-10-26); "Pedestal" was its
+# development name and is still used in the Tuya console.
+MODEL_NAME = "Podium"
 
 # DP ids (rw = send and report, ro = report only, per the console).
 DP_SWITCH = "1"  # switch, bool, rw
