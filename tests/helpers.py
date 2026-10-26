@@ -34,8 +34,8 @@ PRODUCT_KEY = "a2zf7q0zxcutn5dy"
 TITLE = "Birdie Air Purifier"
 FAN = "fan.birdie_air_purifier"
 
-# Synthetic DP values in the format the LAN protocol reports (DP id -> value),
-# following the console's product definition.
+# Synthetic DP values shaped like a real purifier's report (same DPs and
+# types; DP 108 is never reported).
 PURIFIER_DPS: dict[str, Any] = {
     "1": True,
     "2": 12,
@@ -44,8 +44,7 @@ PURIFIER_DPS: dict[str, Any] = {
     "105": 129600,
     "106": 32400,
     "107": False,
-    "108": False,
-    "109": False,
+    "109": True,
     "110": "1.2",
     "111": "normal",
 }

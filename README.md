@@ -56,9 +56,10 @@ device status and a reset filter button.
 Setup, network requirements, key changes and troubleshooting:
 **[docs/air-purifier.md](docs/air-purifier.md)**.
 
-The data point mapping follows the product definition and has **not yet been
-verified on a real purifier** ([docs/remote-testing.md](docs/remote-testing.md));
-it is tested against a simulated purifier. Design notes:
+A first test on a real purifier confirmed the local connection, status
+updates, power and all modes and speeds; the filter replacement and reset
+are not confirmed yet ([docs/remote-testing.md](docs/remote-testing.md)).
+Design notes:
 [docs/architecture.md](docs/architecture.md). Tools:
 `tools/purifier_probe.py` checks a real purifier without Home Assistant,
 `tools/fake_purifier.py` runs a simulated one.
@@ -197,7 +198,7 @@ Implemented:
 - Birdie Wi-Fi air purifier over the local network (Tuya LAN protocol 3.1-3.5
   through [tinytuya](https://github.com/jasonacox/tinytuya)): discovery, UI
   setup, local key updates, fan, sensors, binary sensors and filter reset.
-  Verified against a simulated purifier only.
+  Partly verified on a real purifier (see docs/remote-testing.md).
 
 Not implemented:
 

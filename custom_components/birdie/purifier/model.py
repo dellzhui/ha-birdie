@@ -2,11 +2,13 @@
 
 This is the only place that knows the purifier's data points (DPs). DP ids,
 codes, types and ranges come from the product definition in Birdie's Tuya
-Developer console (product "Birdie Pedestal", PID a2zf7q0zxcutn5dy). They
-describe the product schema, not observed device behaviour: which DPs the
-device reports over the LAN, their exact values and which ones accept writes
-still have to be confirmed on a real device (docs/remote-testing.md). The
-assumptions are marked below. No I/O.
+Developer console (product "Birdie Pedestal", PID a2zf7q0zxcutn5dy).
+
+Observed on a real purifier over the LAN (protocol 3.4, firmware HW1.0.0,
+2026-10-26 probe; docs/remote-testing.md): DPs 1, 2, 3, 21, 105, 106, 107,
+109, 110 and 111 are reported, 108 is not; writes to 1 and 3 work, including
+every mode; changes made in the Birdie app are pushed within a second. The
+remaining assumptions are marked below. No I/O.
 """
 
 from __future__ import annotations
@@ -56,10 +58,16 @@ _FAULTS_BY_DP: Mapping[str, str] = {
 FAULTS: tuple[str, ...] = tuple(_FAULTS_BY_DP.values())
 FAULT_NONE = "none"
 
-# ASSUMPTIONS to confirm on a real device: the console only says "Bool".
-FILTER_STATUS_REPLACE_VALUE = True  # filter_status == True means "replace filter"
-FILTER_COVER_OPEN_VALUE = True  # filter_cover == True means "cover open"
-RESET_FILTER_VALUE = True  # reset_filter is a trigger written as true
+# The console only says "Bool" for these.
+# ASSUMPTION: filter_status == True means "replace filter" (false seen with 90 % left).
+FILTER_STATUS_REPLACE_VALUE = True
+# Observed: filter_cover is true in normal operation and turned false while the
+# cover was opened during the probe, so false means "cover open" (to be
+# confirmed by Birdie).
+FILTER_COVER_OPEN_VALUE = False
+# ASSUMPTION: reset_filter is a trigger written as true (not tested; the
+# device does not report DP 108).
+RESET_FILTER_VALUE = True
 
 
 class CommandError(ValueError):

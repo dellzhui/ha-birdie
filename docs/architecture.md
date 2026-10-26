@@ -1,6 +1,6 @@
 # Architecture: Birdie Air Purifier in Home Assistant
 
-Status: local LAN control selected (2026-10-26). Last reviewed 2026-10-26.
+Status: local LAN control selected (2026-10-26); first real-device probe 2026-10-26. Last reviewed 2026-10-26.
 
 The purifier is a Tuya-based Wi-Fi device. Birdie calls it "Pedestal" in its
 Tuya console and "Podium" in its Homey work; the integration uses the neutral
@@ -25,8 +25,8 @@ The purifier keeps talking to the Tuya cloud for the Birdie app as before;
 Home Assistant does not depend on that.
 
 Birdie (Tobias) validated this route on Homey with an existing Tuya Local
-app: power on/off works over the LAN on a real purifier. Other data points
-are not verified yet.
+app (power on/off). The probe tool then confirmed on a real purifier that
+status, pushes, power and every mode work over the LAN (see Data points).
 
 ### Why the cloud route was dropped
 
@@ -122,29 +122,31 @@ product ID `a2zf7q0zxcutn5dy`.
 
 ## Data points
 
-From the Tuya console screenshot (product schema, not observed behaviour):
+Product schema from the Tuya console, and what a real purifier did over the
+LAN in the 2026-10-26 probe (protocol 3.4, hardware version HW1.0.0, one unit).
 
-| DP | Code | Type | Entity |
-|---|---|---|---|
-| 1 | switch | bool, rw | Fan on/off |
-| 2 | pm25 | value 0-500 ug/m3, ro | PM2.5 sensor |
-| 3 | mode | enum auto/sleep/manual1-4, rw | Fan presets (auto, sleep) and speed (manual1-4 = 25-100 %) |
-| 21 | air_quality | enum, ro | Air quality sensor |
-| 105 | filter_total_minutes | value, ro | Filter life %, time remaining |
-| 106 | filter_used_minutes | value, ro | Filter life %, time remaining |
-| 107 | filter_status | bool, ro | Filter replacement (assumed true = replace) |
-| 108 | reset_filter | bool, rw | Reset filter button (assumed: write true) |
-| 109 | filter_cover | bool, ro | Filter cover (assumed true = open) |
-| 110 | hw_version | string, ro | Device hardware version |
-| 111 | device_error | enum normal/fan/pm25/ocp, ro | Device status sensor |
+| DP | Code | Schema | Entity | Real device |
+|---|---|---|---|---|
+| 1 | switch | bool, rw | Fan on/off | Reported; on/off writes work; app changes pushed |
+| 2 | pm25 | value 0-500 ug/m3, ro | PM2.5 sensor | Reported (int); stayed at 1 while DP 111 reported a PM2.5 sensor fault |
+| 3 | mode | enum auto/sleep/manual1-4, rw | Fan presets (auto, sleep) and speed (manual1-4 = 25-100 %) | Reported; every value written and confirmed; app changes pushed |
+| 21 | air_quality | enum, ro | Air quality sensor | Reported; only `good` seen |
+| 105 | filter_total_minutes | value, ro | Filter life %, time remaining | Reported: 129600 (90 days) |
+| 106 | filter_used_minutes | value, ro | Filter life %, time remaining | Reported; counts up while running, pushed every minute |
+| 107 | filter_status | bool, ro | Filter replacement (assumed true = replace) | Reported: false at 90 % filter life |
+| 108 | reset_filter | bool, rw | Reset filter button (assumed: write true) | Not reported; not tested |
+| 109 | filter_cover | bool, ro | Filter cover (false = open) | Reported: true normally, false for a few seconds while the cover was opened |
+| 110 | hw_version | string, ro | Device hardware version | Reported: `HW1.0.0` |
+| 111 | device_error | enum normal/fan/pm25/ocp, ro | Device status sensor | Reported: `pm25` throughout (see open points) |
 
 ## Open points
 
 | Topic | Owner |
 |---|---|
 | Can the Birdie app show the device ID and local key? (Birdie's app developer is checking) | Birdie |
-| Which DPs the purifier reports over the LAN, their values and which accept writes | Real-device test (`remote-testing.md`) |
-| Protocol version of the purifier firmware | Real-device test |
-| Meaning of filter_status / filter_cover values, reset_filter behaviour, air_quality enum values, PM2.5 scaling | Real-device test / Birdie |
-| Whether the Birdie app also uses the LAN connection and competes for connection slots | Real-device test |
+| The test unit reports device_error `pm25` and PM2.5 = 1: real sensor fault on that unit, or does the value mean something else? | Birdie |
+| filter_cover: confirm false = open | Birdie |
+| filter_status true when a replacement is due, reset_filter behaviour, air_quality values other than `good` | Birdie / later test |
+| Product ID in the purifier's LAN broadcast (the probe was run with a fixed IP address, so discovery was not recorded) | Birdie / later test |
+| Home Assistant on Birdie's network: key change, IP change, power loss, app and Home Assistant connected together | Later test |
 | Final product name (Pedestal / Podium) and whether other product IDs exist | Birdie |

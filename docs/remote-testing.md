@@ -1,6 +1,7 @@
 # Testing With a Real Birdie Air Purifier
 
-Everything so far is verified against a simulated purifier only. The LAN
+A first probe ran on a real purifier on 2026-10-26 (results in the checklist
+below); Home Assistant itself has run against a simulated purifier only. The LAN
 protocol works only inside the purifier's own network: knowing the device ID
 and local key is not enough to reach it over the internet. Real-device
 testing therefore runs on a machine in Birdie's office network.
@@ -62,25 +63,28 @@ redacted).
 
 | # | Check | Result |
 |---|---|---|
-| 1 | `discover` lists the purifier with product ID `a2zf7q0zxcutn5dy`; protocol version: ___ | |
-| 2 | `read` connects with protocol "auto"; all DPs and their types recorded | |
-| 3 | DPs present: 1, 2, 3, 21, 105, 106, 107, 108, 109, 110, 111 (note missing/extra) | |
-| 4 | Changes made in the app arrive as pushes within a few seconds | |
-| 5 | Power off/on from the probe / Home Assistant | |
-| 6 | Modes auto, sleep and speeds manual1-4 | |
-| 7 | PM2.5 value plausible, unit/scale | |
-| 8 | air_quality values seen: ___ | |
-| 9 | filter_total/used minutes plausible; filter life % matches the app | |
-| 10 | filter_status value when a replacement is due (if it can be triggered) | |
-| 11 | filter_cover value with the cover open | |
-| 12 | reset_filter: accepted? counter reset? (only with consent) | |
-| 13 | device_error values (if a fault can be simulated) | |
+| 1 | `discover` lists the purifier with product ID `a2zf7q0zxcutn5dy`; protocol version: ___ | Protocol 3.4; product ID not recorded (probe run with a fixed IP) |
+| 2 | `read` connects with protocol "auto"; all DPs and their types recorded | Pass (with protocol 3.4 set; "auto" not tried), connects in 0.05 s |
+| 3 | DPs present: 1, 2, 3, 21, 105, 106, 107, 108, 109, 110, 111 (note missing/extra) | All except 108; no extra DPs |
+| 4 | Changes made in the app arrive as pushes within a few seconds | Pass (mode, power, filter cover) |
+| 5 | Power off/on from the probe / Home Assistant | Pass (probe) |
+| 6 | Modes auto, sleep and speeds manual1-4 | Pass (probe), each confirmed in ~0.3 s |
+| 7 | PM2.5 value plausible, unit/scale | Open: stayed at 1 while DP 111 reported `pm25` |
+| 8 | air_quality values seen: ___ | `good` only |
+| 9 | filter_total/used minutes plausible; filter life % matches the app | Plausible (129600 / 13311 min = 90 %); app value not compared |
+| 10 | filter_status value when a replacement is due (if it can be triggered) | Not triggered (false at 90 %) |
+| 11 | filter_cover value with the cover open | false while opened, true otherwise (to be confirmed) |
+| 12 | reset_filter: accepted? counter reset? (only with consent) | Not tested |
+| 13 | device_error values (if a fault can be simulated) | `pm25` throughout the test |
 | 14 | Unplug the purifier: entities unavailable; plug in: back without restart | |
 | 15 | Pair the purifier again in the app: Home Assistant asks for the new key, works after entering it | |
-| 16 | Birdie app still works while Home Assistant is connected | |
+| 16 | Birdie app still works while Home Assistant is connected | App changes worked while the probe was connected |
 | 17 | Router assigns a new IP: Home Assistant follows (or Reconfigure works) | |
 
 ## After testing
 
 Update `purifier/model.py` (DPs, assumptions marked ASSUMPTION) and the tests
 from the reports, and record here which checks passed **on the real device**.
+Results above: 2026-10-26 probe (`read` and `test`, one unit, hardware
+version HW1.0.0). Checks 14, 15 and 17 need Home Assistant on Birdie's
+network.

@@ -5,10 +5,11 @@ network. No cloud service, Tuya account or Birdie sign-in is involved: you
 copy two values from the Birdie app once, and Home Assistant talks to the
 purifier inside your home network.
 
-> **Status: in development.** Everything below is tested against a simulated
-> purifier. Which data points a real purifier reports, and some of their
-> meanings, have not been confirmed on a real unit yet
-> ([remote-testing.md](remote-testing.md)).
+> **Status: in development.** The local connection, status updates, power and
+> all modes and speeds are confirmed on a real purifier. The filter
+> replacement and reset, and air quality levels other than "good", are not
+> confirmed yet, and the Home Assistant setup has so far been tested with a
+> simulated purifier ([remote-testing.md](remote-testing.md)).
 
 ## What you need
 

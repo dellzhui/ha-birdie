@@ -35,6 +35,36 @@ def test_state_from_dps() -> None:
     assert not state.reported("999")
 
 
+# DPs a real purifier reported over the LAN (2026-10-26 probe, protocol 3.4).
+REAL_DEVICE_DPS = {
+    "1": True,
+    "2": 1,
+    "3": "auto",
+    "21": "good",
+    "105": 129600,
+    "106": 13311,
+    "107": False,
+    "109": True,
+    "110": "HW1.0.0",
+    "111": "pm25",
+}
+
+
+def test_state_from_real_device_report() -> None:
+    state = PurifierState.from_dps(REAL_DEVICE_DPS)
+    assert state.power is True
+    assert state.mode == "auto"
+    assert state.pm25 == 1
+    assert state.air_quality == "good"
+    assert state.filter_life_percent == 90
+    assert state.filter_remaining_minutes == 116289
+    assert state.filter_replace_needed is False
+    assert state.filter_cover_open is False
+    assert state.hardware_version == "HW1.0.0"
+    assert state.fault == "pm25_sensor"
+    assert not state.reported("108")
+
+
 @pytest.mark.parametrize(
     ("value", "mode", "speed"),
     [
@@ -80,7 +110,8 @@ def test_filter_lifetime(dps: dict, life: int | None, remaining: int | None) -> 
         ("2", 35.0, "pm25", 35),
         ("21", "excellent", "air_quality", None),
         ("107", True, "filter_replace_needed", True),
-        ("109", True, "filter_cover_open", True),
+        ("109", False, "filter_cover_open", True),
+        ("109", True, "filter_cover_open", False),
         ("110", "", "hardware_version", None),
         ("111", "ocp", "fault", "overcurrent"),
         ("111", "smoke", "fault", None),
