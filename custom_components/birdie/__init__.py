@@ -5,17 +5,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .const import DOMAIN, PLATFORMS, is_cloud_entry_data
+from .const import DOMAIN, PLATFORMS, is_purifier_entry_data
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: Any, entry: Any) -> bool:
     """Set up Birdie from a config entry."""
-    if is_cloud_entry_data(entry.data):
-        from .cloud.entry import async_setup_cloud_entry
+    if is_purifier_entry_data(entry.data):
+        from .purifier.entry import async_setup_purifier_entry
 
-        return await async_setup_cloud_entry(hass, entry)
+        return await async_setup_purifier_entry(hass, entry)
 
     from homeassistant.components import bluetooth
     from homeassistant.components.bluetooth.match import ADDRESS, BluetoothCallbackMatcher
@@ -67,10 +67,10 @@ async def async_setup_entry(hass: Any, entry: Any) -> bool:
 
 async def async_unload_entry(hass: Any, entry: Any) -> bool:
     """Unload a Birdie config entry."""
-    if is_cloud_entry_data(entry.data):
-        from .cloud.entry import async_unload_cloud_entry
+    if is_purifier_entry_data(entry.data):
+        from .purifier.entry import async_unload_purifier_entry
 
-        return await async_unload_cloud_entry(hass, entry)
+        return await async_unload_purifier_entry(hass, entry)
 
     from homeassistant.components import bluetooth
 
@@ -81,22 +81,3 @@ async def async_unload_entry(hass: Any, entry: Any) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         bluetooth.async_rediscover_address(hass, coordinator.address)
     return unload_ok
-
-
-async def async_remove_config_entry_device(hass: Any, entry: Any, device_entry: Any) -> bool:
-    """Allow removing a cloud device that the Birdie account no longer reports."""
-    if not is_cloud_entry_data(entry.data):
-        return False
-    current = entry.runtime_data.data or {}
-    return not any(
-        domain == DOMAIN and identifier in current
-        for domain, identifier in device_entry.identifiers
-    )
-
-
-async def async_remove_entry(hass: Any, entry: Any) -> None:
-    """Revoke the Birdie sign-in when a cloud account entry is deleted."""
-    if is_cloud_entry_data(entry.data):
-        from .cloud.oauth import async_revoke
-
-        await async_revoke(hass, entry)

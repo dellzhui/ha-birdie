@@ -1,18 +1,18 @@
-"""Fan platform for the Birdie integration (cloud-connected air purifiers)."""
+"""Fan platform for the Birdie integration (air purifiers)."""
 
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .cloud.coordinator import BirdieCloudConfigEntry
-from .cloud.fan import async_setup_cloud_fans
+from .purifier.coordinator import BirdiePurifierConfigEntry
+from .purifier.fan import async_setup_purifier_fans
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: BirdieCloudConfigEntry,
+    entry: BirdiePurifierConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Birdie fans."""
-    await async_setup_cloud_fans(hass, entry, async_add_entities)
+    await async_setup_purifier_fans(hass, entry, async_add_entities)

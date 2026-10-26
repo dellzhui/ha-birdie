@@ -10,7 +10,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import is_cloud_entry_data
+from .const import is_purifier_entry_data
 from .coordinator import BirdieConfigEntry, BirdieCoordinator
 from .entity import BirdieEntity
 
@@ -30,10 +30,10 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Birdie binary sensors."""
-    if is_cloud_entry_data(entry.data):
-        from .cloud.binary_sensor import async_setup_cloud_binary_sensors
+    if is_purifier_entry_data(entry.data):
+        from .purifier.binary_sensor import async_setup_purifier_binary_sensors
 
-        await async_setup_cloud_binary_sensors(hass, entry, async_add_entities)
+        await async_setup_purifier_binary_sensors(hass, entry, async_add_entities)
         return
 
     coordinator = entry.runtime_data

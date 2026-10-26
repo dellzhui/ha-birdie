@@ -1,223 +1,150 @@
-# Architecture: Birdie Pedestal in Home Assistant
+# Architecture: Birdie Air Purifier in Home Assistant
 
-Status: option B (Birdie cloud bridge) selected; option A3 dropped. Last reviewed 2026-10-17.
+Status: local LAN control selected (2026-10-26). Last reviewed 2026-10-26.
 
-## Implementation status
+The purifier is a Tuya-based Wi-Fi device. Birdie calls it "Pedestal" in its
+Tuya console and "Podium" in its Homey work; the integration uses the neutral
+name "Birdie Air Purifier" until the product name is confirmed
+(`purifier/model.py`, `MODEL_NAME`).
 
-| Part | State |
-|---|---|
-| Home Assistant: Birdie account entry, Pedestal entities, diagnostics | Implemented; unit-tested and verified end to end in HA 2026.9.2 against the bridge and a fake Tuya cloud |
-| Bridge: HTTP API, scoping, caching, error mapping, container image | Implemented with development tokens |
-| Sign-in (OAuth 2.0 + PKCE, Birdie sign-in page) | Implemented end to end with a development identity provider (`sign-in.md`); Firebase provider and shared token store wait for Birdie |
-| Real device validation | Waiting for Birdie: cloud project access, see `remote-testing.md` |
-| Deployment of the bridge | Waiting for Birdie: hosting decision |
+## Decision
 
-Legend for facts: **[DOC]** official Tuya / Home Assistant documentation,
-**[SRC]** official source code (Tuya SDKs, HA core), **[INF]** our inference,
-**[OPEN]** must be confirmed by Birdie or Tuya.
-
-## 1. System today
+Home Assistant talks to the purifier **directly over the local network** with
+the Tuya LAN protocol, using the device ID and local key the user copies from
+the Birdie app. Normal operation needs no cloud API, no Tuya IoT Core
+subscription, no Tuya cloud credentials and no Birdie backend.
 
 ```
-Birdie app (Tuya App SDK) --BLE pairing--> Pedestal --Wi-Fi/MQTT--> Tuya Cloud
-        \___________________ user account & device binding _________/
+Birdie app ── BLE pairing, Wi-Fi setup ──> Purifier ── (own firmware traffic) ──> Tuya Cloud
+   │ shows device ID + local key              ▲
+   ▼                                          │ Tuya LAN protocol (TCP 6668, encrypted)
+User ── enters them once ──> Home Assistant ──┘ + UDP 6666/6667 announcements
 ```
 
-* Users and device bindings live in Tuya's user pool for Birdie's App SDK app.
-* Birdie does not (as far as we know) run its own backend. **[OPEN]**
+The purifier keeps talking to the Tuya cloud for the Birdie app as before;
+Home Assistant does not depend on that.
 
-## 2. Verified Tuya facts that drive the design
+Birdie (Tobias) validated this route on Homey with an existing Tuya Local
+app: power on/off works over the LAN on a real purifier. Other data points
+are not verified yet.
 
-1. **Every Tuya OpenAPI request is signed with the cloud project's Access
-   Secret** (HMAC-SHA256 over client_id, access_token, timestamp, nonce and
-   request). Holding an access token alone is not enough. **[DOC]**
-   https://developer.tuya.com/en/docs/iot/new-singnature?id=Kbw0q34cs2e5g
-2. A cloud project sees Birdie app devices through *Devices -> Link My App*
-   ("OEM App or an app built with Tuya app SDKs"; max two projects per app) or
-   *Link SaaS* (all devices of a PID). Such a project can access the whole
-   fleet. **[DOC]** https://developer.tuya.com/en/docs/iot/link-devices?id=Ka471nu1sfmkl
-3. Consequence: **the Access Secret must never ship inside an open-source
-   Home Assistant integration.** Anyone could extract it and control every
-   linked Birdie device. **[INF, follows from 1+2]**
-4. *Link Tuya App Account* (QR scan) works for Tuya Smart / Smart Life
-   accounts, not for a custom App SDK app, so end users cannot attach their
-   Birdie account to a personal developer project. **[DOC + INF]**
-5. The official HA `tuya` integration uses `tuya-device-sharing-sdk` with a
-   Tuya-issued HA client id (`HA_3y9q4ak7g4ephrvke`, schema `haauthorize`), a
-   QR code scanned in the app, user-scoped encrypted `/v1.0/m/life/...` APIs
-   and MQTT push. No secret is needed. **[SRC]** It officially supports only
-   Tuya Smart and Smart Life; OEM-app users get "Please use the designated APP
-   to scan the code" and there is no documented way for a brand to enable it.
-   **[DOC + SRC]** home-assistant/core#120619, tuya/tuya-device-sharing-sdk#43
-6. OAuth 2.0 authorization-code mode (`grant_type=2`) lets an app user grant a
-   third party access via a Tuya-hosted H5 login page; the code exchange needs
-   the client secret, i.e. a server. Whether an App SDK app can be selected
-   is not documented. **[DOC + OPEN]**
-   https://developer.tuya.com/en/docs/iot/authorization-code-page-usage?id=Kdkyz44dz6a7r
-7. Legacy "authorized login" (`POST /v1.0/iot-01/associated-users/actions/authorized-login`,
-   username + password + app schema) still exists but also requires the
-   project secret. **[DOC]**
-8. Real-time push (Message Service / Pulsar) is project-level and needs the
-   Access Secret. **[DOC]**
-9. Quotas: per-API frequency limits per project; the **Trial Edition** allows
-   ~26k API calls per month and suspends service when exhausted (error
-   28841004). Production cost scales with polling. **[DOC]**
-   https://developer.tuya.com/en/docs/iot/membership-service?id=K9m8k45jwvg9j
+### Why the cloud route was dropped
 
-## 3. Three access scenarios
+An earlier design (kept in git: branch `feature/pedestal-cloud`, tag
+`pedestal-cloud-final`) used a "Birdie Cloud Bridge" holding the Tuya cloud
+project secret, with OAuth sign-in for Birdie accounts. Birdie does not want
+the paid Tuya IoT Core service that route needs (polling every user's devices
+exceeds the trial quota), and it needs hosting plus a Firebase identity
+integration. The LAN route needs none of that. Kept from that work: the
+Home Assistant entities, the fan/preset mapping, the DP decoding and the
+tests around them.
 
-| Scenario | Mechanism | Where the secret lives |
+## Components
+
+| Path | Role | Home Assistant imports |
 |---|---|---|
-| Developer, own test devices | Own cloud project, simple-mode token | Developer machine (`.env.local`) |
-| Birdie, its product fleet | Birdie cloud project + Link My App / Link SaaS | Birdie-controlled server only |
-| Ordinary Birdie user in HA | See options below | Never on the user's machine |
+| `custom_components/birdie/tuya_lan/` | LAN client: connection, status, DP writes, reconnect, discovery, log redaction | none |
+| `custom_components/birdie/purifier/model.py` | The only place that knows the purifier's DPs: decode state, build DP writes | none |
+| `custom_components/birdie/purifier/` (rest) | Coordinator, entities, config flow helpers, shared discovery | yes |
+| `custom_components/birdie/config_flow.py` | UI setup for Bluetooth devices and purifiers | yes |
+| `tools/purifier_probe.py` | Real-device checks on the customer's network | none |
+| `tools/fake_purifier.py`, `tests/tuya_lan/fake_device.py` | Simulated purifier speaking the LAN protocol | none |
 
-## 4. Options for the end-user path
+The Bluetooth (Birdie Pro) part of the integration is unchanged.
 
-### A. Home Assistant calls Tuya OpenAPI directly
+### Tuya LAN library
 
-* A1 - user supplies their own developer project credentials: not possible
-  for App SDK users (fact 4) and contrary to the requirement that users do not
-  need Tuya developer accounts.
-* A2 - integration embeds Birdie's credentials: rejected (fact 3).
-* A3 - HA-style device sharing (QR) for Birdie's app: no server, push updates,
-  best UX. **Depends on Tuya enabling it for Birdie's app** (undocumented).
-  If granted with a Birdie client id, the integration would use
-  `tuya-device-sharing-sdk` as transport.
-
-### B. Thin Birdie cloud bridge
-
-```
-Home Assistant  --OAuth2 + small REST-->  Birdie bridge  --signed OpenAPI-->  Tuya Cloud
- (birdie_cloud)                            (holds secret,
-                                            per-user scoping)
-```
-
-* User signs in with their Birdie app account (Tuya OAuth H5 page if available
-  for the App SDK app, otherwise legacy authorized login through the bridge).
-* Bridge maps HA sessions to the Tuya `uid`, only allows that user's devices,
-  and exposes three endpoints: list devices, get state, send command.
-* Can run serverless (one function + small key-value store).
-* Costs: a hosted component Birdie must own (hosting, secret management,
-  security responsibility); Tuya API calls billed to Birdie's project.
-* Fully built on documented APIs. Later it can consume Message Service and
-  serve cached state, cutting Tuya API calls.
-
-### C. Not pursued now
-
-* Matter: native and local, but requires firmware support (out of scope). **[OPEN]**
-* Local LAN control with `local_key`: still needs a cloud step to hand out the
-  key, plus community protocol code. Not simpler.
-
-### Comparison
-
-| | A3 Tuya device sharing | B Birdie bridge |
+| Project | License | Use |
 |---|---|---|
-| Implementation effort | Low (reuse Tuya SDK) | Medium (+ bridge) |
-| Security | Tuya-managed, user-scoped | Good if bridge scoping is correct; Birdie owns risk |
-| User setup | Scan QR in Birdie app | Sign in with Birdie account |
-| Maintenance | Low; depends on Tuya | Bridge to operate |
-| Extra server | No | Yes (serverless) |
-| Dependency | Tuya enablement + possibly app change | Birdie Tuya project, hosting |
-| Real-time | MQTT push | Polling (push possible later) |
-| Availability today | Unknown | Yes |
+| [tinytuya](https://github.com/jasonacox/tinytuya) 1.20.0 | MIT | **Dependency.** Protocol 3.1-3.5 framing, AES-ECB/GCM, 3.4/3.5 session key negotiation, UDP announcement decryption. Same pinned version as Tuya Local, so both can be installed together. |
+| [make-all/tuya-local](https://github.com/make-all/tuya-local) | MIT | Reference for how to drive tinytuya from Home Assistant (persistent connection, heartbeats, protocol rotation). No code copied. |
+| [rospogrigio/localtuya](https://github.com/rospogrigio/localtuya) | GPL-3.0 | Reference only (license incompatible with copying into this MIT project). No code copied. |
 
-## 5. Decision
+The protocol and its encryption are not reimplemented; only the device side
+used by the test simulator is assembled from tinytuya's primitives.
 
-1. **Option B, the Birdie cloud bridge, is the delivery path.** Option A3
-   (Tuya-enabled QR sharing) is not pursued.
-2. The Pedestal is added to the **existing `birdie` integration** next to
-   Birdie Pro, as a second config entry type ("Birdie account").
-3. The Home Assistant side never talks to Tuya directly and never holds Tuya
-   credentials. It talks only to the bridge (`custom_components/birdie/cloud/`,
-   transport-agnostic via `CloudTransport`).
-4. The Tuya OpenAPI client lives in the bridge (`bridge/birdie_bridge/tuya/`)
-   and is also used for development and remote debugging (`birdie-tuya` CLI).
-5. Open: how the bridge authenticates a Birdie user. The Birdie privacy
-   policy lists email/password plus Google, Apple and Facebook sign-in, and
-   Firebase; whether accounts live in Firebase Auth or in Tuya's user pool
-   must be confirmed by Birdie.
+### LAN client (`tuya_lan.TuyaLanDevice`)
 
-### Repository layout
+* tinytuya does blocking socket I/O. Each device gets one worker thread; all
+  tinytuya calls run there, so they are serialised without locks and never
+  block the event loop.
+* `async_connect()` opens a persistent connection and reads the full status.
+  With protocol "auto" it tries the version from the device's announcement
+  (or the last working one) first, then 3.3, 3.5, 3.4, 3.1. 3.2 (tinytuya's
+  "device22" variant) is used only when configured.
+* A background loop sends a heartbeat every 10 s, receives pushed status
+  changes, reads the full status every 60 s and 3 s after a command, treats
+  35 s without any frame as a lost connection and reconnects with backoff
+  (5 s doubling to 60 s).
+* Commands are DP writes (`{"1": true, "3": "manual2"}`); the device confirms
+  them with a status push.
+* Errors: `DeviceUnreachableError` (nothing answers at the address, timeout)
+  and `InvalidLocalKeyError` (the device answered but rejected the key: wrong
+  key, or the protocol version does not match).
+* tinytuya logs the local key in some debug messages; a filter on the
+  tinytuya loggers replaces registered keys with `**REDACTED**`.
 
-```
-custom_components/birdie/        Home Assistant integration (published via HACS)
-  cloud/                         Pedestal model, transport protocol (no Tuya secrets)
-bridge/                          Birdie cloud bridge (deployed by/for Birdie)
-  birdie_bridge/tuya/            Tuya Cloud OpenAPI client
-docs/                            Architecture notes
-tests/                           Integration-side tests
-```
+### Discovery
 
-The HTTP contract between the integration and the bridge is specified in
-`bridge-api.md`.
+Tuya devices announce themselves every few seconds (UDP 6666 plain, 6667
+encrypted with a published key; some 3.5 devices only answer a request sent
+to UDP 7000). The announcement carries device ID, IP, protocol version and
+product ID (`productKey`). The integration recognises Birdie purifiers by
+product ID `a2zf7q0zxcutn5dy`.
 
-Before pushing `bridge/` to the public repository, confirm with Birdie that
-publishing it is acceptable; otherwise move it to a private repository.
+* Config flow: searches for 6 s and lists Birdie purifiers; manual entry is
+  always possible. Without an IP address, manual entry searches for the given
+  device ID.
+* While a purifier is set up, one shared listener follows configured
+  purifiers to a new IP address and offers newly seen Birdie purifiers as
+  discovered devices in the UI.
+* Sockets use SO_REUSEADDR/SO_REUSEPORT to coexist with other Tuya
+  integrations. Containers need host networking to receive broadcasts.
 
-## 6. Home Assistant presentation
+### Home Assistant behaviour
 
-* Domain: the existing `birdie` integration (shared with Birdie Pro).
-* Branding: since HA 2026.3 a custom integration ships `brand/icon.png`,
-  `logo.png` (+ `@2x`, dark variants) in its own folder; the brands repo no
-  longer accepts custom integrations. Set `hacs.json` minimum HA to 2026.3.0.
-* The integration only sees the bridge API's Birdie terms (opaque device ids,
-  state objects, named commands); the bridge translates to and from Tuya DPs.
-* Device registry: manufacturer "Birdie", model "Birdie Pedestal",
-  hw_version from the device's `hardware_version` (Tuya DP 110).
-* Entities (HA guidance: air purifiers are `fan` entities; named manual speeds
-  are percentages, presets are device-managed modes):
+* One config entry per purifier (unique ID = Tuya device ID). Entry data:
+  device ID, host, local key, configured protocol ("auto" by default) and the
+  detected version as a hint for the next start.
+* Setup connects once: unreachable -> setup retried by Home Assistant; key
+  rejected -> re-authentication flow asking for the new key.
+* At runtime the device pushes changes; entities go unavailable when the
+  connection is lost and come back with it. Three consecutive key rejections
+  while reconnecting start re-authentication (a single rejection can also be
+  a rebooting device).
+* Each entity declares the DPs it shows and stays unavailable until the
+  device has reported them, because the LAN protocol may not expose every DP
+  of the product definition. The filter reset button is not tied to a
+  reported DP (a trigger DP may never be reported).
+* Reconfigure changes the key, IP address or protocol version.
+* Diagnostics contain the raw DPs (for mapping verification) with key and IP
+  address redacted.
 
-| Bridge state / command (Tuya DP) | Entity |
+## Data points
+
+From the Tuya console screenshot (product schema, not observed behaviour):
+
+| DP | Code | Type | Entity |
+|---|---|---|---|
+| 1 | switch | bool, rw | Fan on/off |
+| 2 | pm25 | value 0-500 ug/m3, ro | PM2.5 sensor |
+| 3 | mode | enum auto/sleep/manual1-4, rw | Fan presets (auto, sleep) and speed (manual1-4 = 25-100 %) |
+| 21 | air_quality | enum, ro | Air quality sensor |
+| 105 | filter_total_minutes | value, ro | Filter life %, time remaining |
+| 106 | filter_used_minutes | value, ro | Filter life %, time remaining |
+| 107 | filter_status | bool, ro | Filter replacement (assumed true = replace) |
+| 108 | reset_filter | bool, rw | Reset filter button (assumed: write true) |
+| 109 | filter_cover | bool, ro | Filter cover (assumed true = open) |
+| 110 | hw_version | string, ro | Device hardware version |
+| 111 | device_error | enum normal/fan/pm25/ocp, ro | Device status sensor |
+
+## Open points
+
+| Topic | Owner |
 |---|---|
-| `power`, `mode`, `fan_speed` / `set_power`, `set_mode`, `set_fan_speed` (switch, mode) | `fan`: on/off; speed 1-4 -> 25/50/75/100 %; presets `auto`, `sleep` |
-| `pm25` (pm25) | `sensor` PM25, ug/m3, measurement |
-| `air_quality` (air_quality) | `sensor` enum: good / moderate / poor / very_poor |
-| `filter_life_percent`, `filter_remaining_minutes` (filter_total/used_minutes) | `sensor` filter life %; remaining duration |
-| `filter_replace_needed` (filter_status) | `binary_sensor` problem (DP meaning TBC) |
-| `reset_filter` (reset_filter) | `button` (config) |
-| `filter_cover_open` (filter_cover) | `binary_sensor` opening, diagnostic (DP meaning TBC) |
-| `fault` (device_error) | `sensor` enum diagnostic: none / fan / pm25_sensor / overcurrent |
-
-* Coordinator: cloud polling (default 60 s, configurable), `ConfigEntryAuthFailed`
-  for re-auth, `UpdateFailed` for transient errors, entities unavailable when
-  the device is offline, refresh after each command.
-
-## 7. Testing without Birdie's device
-
-Our own Tuya developer account can reproduce the Pedestal's DP schema in a
-self-created product and debug it with a Tuya *virtual device* (Product ->
-Device Debugging; the web debugger can change DP values and report them to
-the cloud). Linked to our own cloud project through a Smart Life account, it
-exercises the real Tuya Cloud: signing, tokens, DP specification, status and
-commands. It cannot validate firmware behaviour, Birdie's PID, or Birdie's
-App SDK account model. See https://developer.tuya.com/en/docs/iot/device_debug?id=Kbrcqod1qa730
-and https://developer.tuya.com/en/docs/iot/manage-virtual-devices?id=Ka4725tiyfhg0
-
-## 8. Open questions
-
-For Birdie:
-1. Tuya developer account: is the App SDK app in Birdie's own Tuya account?
-   Which data center(s)?
-2. Product ID: `a2zf7q0zxcutn5dy` (console status "Developing"). Will
-   production units keep this PID?
-3. Can Birdie create a cloud project linked to its app (Link My App or Link
-   SaaS) for remote debugging, and share time-limited credentials with us
-   through a secure channel?
-4. Does Birdie have or want any backend of its own? Is a small hosted bridge
-   acceptable if needed?
-5. DP semantics (types are now known from the console): does
-   `filter_status = true` mean "replace filter" or "OK"? Does
-   `filter_cover = true` mean open or closed? Does `reset_filter = true` reset
-   `filter_used_minutes` to 0, and does the device report it back to false?
-   What does `ocp` in `device_error` stand for?
-6. Does the Wi-Fi module / firmware support Matter?
-
-For Tuya (via Birdie's account manager):
-1. Can Birdie's App SDK app be enabled for the Home Assistant QR device-sharing
-   flow (`tuya-device-sharing-sdk`), ideally with a Birdie client id? What app
-   changes would be required?
-2. Can the App SDK app be selected for OAuth 2.0 authorization (H5 login)?
-3. Does Link My App include future devices of all users automatically?
-4. API call pricing / quotas for the expected fleet size; Message Service cost.
-5. Is `authorized-login` deprecated, and is `schema` the App SDK channel id?
+| Can the Birdie app show the device ID and local key? (Birdie's app developer is checking) | Birdie |
+| Which DPs the purifier reports over the LAN, their values and which accept writes | Real-device test (`remote-testing.md`) |
+| Protocol version of the purifier firmware | Real-device test |
+| Meaning of filter_status / filter_cover values, reset_filter behaviour, air_quality enum values, PM2.5 scaling | Real-device test / Birdie |
+| Whether the Birdie app also uses the LAN connection and competes for connection slots | Real-device test |
+| Final product name (Pedestal / Podium) and whether other product IDs exist | Birdie |

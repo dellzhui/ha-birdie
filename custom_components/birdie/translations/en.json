@@ -1,39 +1,33 @@
 {
   "config": {
     "abort": {
-      "already_configured": "This Birdie device or account is already configured.",
+      "already_configured": "This Birdie device is already configured.",
       "not_supported": "The discovered Bluetooth device is not a supported Birdie device.",
-      "reauth_successful": "Re-authentication was successful.",
-      "wrong_account": "You signed in to a different Birdie account.",
-      "invalid_auth": "The Birdie cloud rejected the sign-in.",
-      "cannot_connect": "Unable to reach the Birdie cloud service.",
-      "missing_configuration": "Birdie account sign-in is not configured.",
-      "authorize_url_timeout": "Timeout generating the sign-in link.",
-      "no_url_available": "No Home Assistant URL is available. Check your network settings.",
-      "oauth_error": "The Birdie cloud returned invalid sign-in data.",
-      "oauth_failed": "Error while getting the access token from the Birdie cloud.",
-      "oauth_timeout": "Timeout while getting the access token from the Birdie cloud.",
-      "oauth_unauthorized": "The Birdie cloud rejected the sign-in.",
-      "oauth_implementation_unavailable": "Birdie account sign-in is temporarily unavailable.",
-      "missing_credentials": "Birdie account sign-in is not configured.",
-      "user_rejected_authorize": "Sign-in was cancelled: {error}"
+      "reauth_successful": "The local key was updated.",
+      "reconfigure_successful": "The air purifier settings were updated.",
+      "reconfigure_not_supported": "Only air purifiers can be reconfigured."
     },
     "error": {
       "no_devices_found": "No Birdie devices were discovered. You can still add one manually by entering its Bluetooth address.",
-      "invalid_url": "Enter a valid http:// or https:// Birdie cloud URL.",
-      "invalid_auth": "The access token was rejected.",
-      "cannot_connect": "Unable to reach the Birdie cloud service."
+      "invalid_device_id": "Enter the device ID shown in the Birdie app.",
+      "invalid_local_key_format": "The local key has 16 characters. Copy it from the Birdie app.",
+      "invalid_host": "Enter the IP address of the air purifier.",
+      "device_not_found": "The air purifier was not found on the local network. Enter its IP address.",
+      "cannot_connect": "Cannot connect to the air purifier. Check that it is on, connected to Wi-Fi and reachable from Home Assistant.",
+      "invalid_local_key": "The air purifier did not accept the local key. The key changes whenever the purifier is paired again in the Birdie app; copy the current key.",
+      "unknown": "Unexpected error. See the Home Assistant log for details."
     },
     "progress": {
-      "scan": "Scanning for Birdie Bluetooth devices..."
+      "scan": "Scanning for Birdie Bluetooth devices...",
+      "lan_scan": "Searching the local network for Birdie air purifiers..."
     },
     "step": {
       "user": {
         "title": "Add Birdie",
-        "description": "Choose how to add your Birdie product.",
+        "description": "Choose which Birdie product to add.",
         "menu_options": {
           "ble": "Bluetooth device (Birdie Pro)",
-          "cloud": "Birdie account (Wi-Fi devices such as Birdie Pedestal)"
+          "purifier": "Air purifier (Wi-Fi, local network)"
         }
       },
       "bluetooth_confirm": {
@@ -48,33 +42,61 @@
           "name": "Name"
         }
       },
-      "cloud": {
-        "title": "Add Birdie account",
-        "description": "Submit to open the Birdie sign-in page and sign in with your Birdie account.",
+      "purifier_pick": {
+        "title": "Add Birdie air purifier",
+        "description": "These Birdie air purifiers were found on your network.",
+        "data": {
+          "device_id": "Air purifier"
+        }
+      },
+      "purifier_key": {
+        "title": "Add Birdie air purifier",
+        "description": "Enter the local key of the air purifier with device ID {device_id} ({host}). The Birdie app shows the device ID and local key in the device settings.",
+        "data": {
+          "local_key": "Local key"
+        }
+      },
+      "purifier_manual": {
+        "title": "Add Birdie air purifier",
+        "description": "Enter the device ID and local key shown in the Birdie app. Leave the IP address empty to search the local network.",
+        "data": {
+          "device_id": "Device ID",
+          "local_key": "Local key",
+          "host": "IP address"
+        },
         "sections": {
           "advanced": {
             "name": "Advanced",
-            "description": "Only needed for development: another Birdie cloud address, or a development token instead of signing in.",
+            "description": "Only change the protocol version if automatic detection fails.",
             "data": {
-              "bridge_url": "Birdie cloud URL",
-              "access_token": "Development token"
+              "protocol_version": "Protocol version"
             }
           }
         }
       },
       "reauth_confirm": {
-        "title": "Re-authenticate Birdie account",
-        "description": "The development token for {account} is no longer valid. Enter a new one.",
+        "title": "Update local key",
+        "description": "{name} (device ID {device_id}) no longer accepts its local key, usually because it was paired again in the Birdie app. Enter the current local key from the app.",
         "data": {
-          "access_token": "Access token"
+          "local_key": "Local key"
         }
       },
-      "reauth_oauth": {
-        "title": "Sign in to Birdie again",
-        "description": "The sign-in for {account} has expired or was revoked. Sign in again to keep your Birdie devices connected."
-      },
-      "pick_implementation": {
-        "title": "Pick an authentication method"
+      "reconfigure": {
+        "title": "Reconfigure Birdie air purifier",
+        "description": "Change the connection settings of device ID {device_id}. Leave the local key empty to keep the current one.",
+        "data": {
+          "local_key": "Local key",
+          "host": "IP address"
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "Only change the protocol version if automatic detection fails.",
+            "data": {
+              "protocol_version": "Protocol version"
+            }
+          }
+        }
       }
     }
   },
@@ -132,23 +154,17 @@
     }
   },
   "exceptions": {
-    "auth_failed": {
-      "message": "The Birdie account needs to be re-authenticated."
+    "invalid_local_key": {
+      "message": "The air purifier did not accept the local key."
     },
-    "device_offline": {
-      "message": "The device is offline."
-    },
-    "device_not_found": {
-      "message": "The device is no longer part of this Birdie account."
-    },
-    "command_rejected": {
-      "message": "The device rejected the command."
+    "device_unreachable": {
+      "message": "Cannot reach the air purifier at {host}."
     },
     "invalid_command": {
       "message": "Invalid command: {error}"
     },
-    "cloud_error": {
-      "message": "Birdie cloud request failed: {error}"
+    "mode_not_supported": {
+      "message": "The air purifier has not reported its operating mode, so modes and speeds cannot be set."
     }
   }
 }

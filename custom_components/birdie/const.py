@@ -10,30 +10,31 @@ DOMAIN = "birdie"
 CONF_NAME = "name"
 
 PLATFORMS: list[str] = ["sensor", "binary_sensor", "number"]
-CLOUD_PLATFORMS: list[str] = ["sensor", "binary_sensor", "fan", "button"]
+PURIFIER_PLATFORMS: list[str] = ["sensor", "binary_sensor", "fan", "button"]
 
-# Config entry types. Entries created before cloud support have no type and
-# are Bluetooth entries.
+# Config entry types. Entries created before purifier support have no type
+# and are Bluetooth entries.
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_BLUETOOTH = "bluetooth"
-ENTRY_TYPE_CLOUD = "cloud"
+ENTRY_TYPE_PURIFIER = "purifier"
 
-CONF_BRIDGE_URL = "bridge_url"
-CONF_ACCESS_TOKEN = "access_token"
-CONF_ACCOUNT_ID = "account_id"
-
-# Production Birdie cloud (bridge) address; None until Birdie's hosting is
-# decided, so the config flow asks for it.
-DEFAULT_BRIDGE_URL: str | None = None
-
-
-def is_cloud_entry_data(data: Mapping[str, Any]) -> bool:
-    """Return True if config entry data belongs to a Birdie cloud account."""
-    return data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CLOUD
+# Air purifier (Tuya LAN) entry data.
+CONF_DEVICE_ID = "device_id"
+CONF_LOCAL_KEY = "local_key"
+CONF_PROTOCOL_VERSION = "protocol_version"
+CONF_DETECTED_VERSION = "detected_version"
+CONF_PRODUCT_KEY = "product_key"
 
 
-CLOUD_SCAN_INTERVAL_SECONDS = 60
-CLOUD_COMMAND_REFRESH_DELAY_SECONDS = 2
+def is_purifier_entry_data(data: Mapping[str, Any]) -> bool:
+    """Return True if config entry data belongs to an air purifier."""
+    return data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_PURIFIER
+
+
+PURIFIER_DISCOVERY_SECONDS = 6
+# Consecutive key rejections before asking the user for a new local key;
+# a single rejection can also be a busy or rebooting device.
+PURIFIER_KEY_FAILURES_BEFORE_REAUTH = 3
 
 BIRDIE_NAME_PREFIXES: tuple[str, ...] = ("Birdie", "Birdie Pro")
 

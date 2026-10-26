@@ -29,11 +29,12 @@
   ],
   "codeowners": ["@dellzhui"],
   "config_flow": true,
-  "dependencies": ["auth", "bluetooth", "bluetooth_adapters"],
+  "dependencies": ["bluetooth", "bluetooth_adapters", "network"],
   "documentation": "https://github.com/dellzhui/ha-birdie",
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/dellzhui/ha-birdie/issues",
-  "requirements": [],
+  "loggers": ["tinytuya"],
+  "requirements": ["tinytuya==1.20.0"],
   "version": "0.1.3"
 }

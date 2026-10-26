@@ -1,138 +1,236 @@
-"""Shared test helpers for the Birdie integration."""
+"""Shared test helpers for the Birdie integration (synthetic data only)."""
 
 from __future__ import annotations
 
+import asyncio
 import copy
-import json
-import time
-from pathlib import Path
-from typing import Any
+from collections.abc import Callable
+from typing import Any, ClassVar
 
-from custom_components.birdie.cloud.bridge import (
-    BridgeAccount,
-    BridgeApiError,
-    BridgeDevice,
-    BridgeDeviceNotFoundError,
-)
+from homeassistant.const import CONF_HOST
+
 from custom_components.birdie.const import (
-    CONF_ACCESS_TOKEN,
-    CONF_ACCOUNT_ID,
-    CONF_BRIDGE_URL,
+    CONF_DETECTED_VERSION,
+    CONF_DEVICE_ID,
     CONF_ENTRY_TYPE,
+    CONF_LOCAL_KEY,
+    CONF_PRODUCT_KEY,
+    CONF_PROTOCOL_VERSION,
     DOMAIN,
-    ENTRY_TYPE_CLOUD,
+    ENTRY_TYPE_PURIFIER,
+)
+from custom_components.birdie.tuya_lan import (
+    DeviceConfig,
+    DeviceUnreachableError,
+    DiscoveredDevice,
+    TuyaLanError,
 )
 
-FIXTURES = Path(__file__).parent / "fixtures"
+DEVICE_ID = "bf3a9c71d2e04b58f6qz1x"
+LOCAL_KEY = "0123456789abcdef"
+NEW_KEY = "fedcba9876543210"
+HOST = "192.168.1.40"
+PRODUCT_KEY = "a2zf7q0zxcutn5dy"
+TITLE = "Birdie Air Purifier"
+FAN = "fan.birdie_air_purifier"
 
-DEVICE_ID = "5b0c9e7d2a4f4e1c8a3d6b90"
-ACCOUNT_ID = "acct-synthetic-1"
-BRIDGE_URL = "https://bridge.test"
-TOKEN = "dev-token-1"
+# Synthetic DP values in the format the LAN protocol reports (DP id -> value),
+# following the console's product definition.
+PURIFIER_DPS: dict[str, Any] = {
+    "1": True,
+    "2": 12,
+    "3": "auto",
+    "21": "good",
+    "105": 129600,
+    "106": 32400,
+    "107": False,
+    "108": False,
+    "109": False,
+    "110": "1.2",
+    "111": "normal",
+}
 
 
-def load_fixture(name: str) -> Any:
-    return json.loads((FIXTURES / name).read_text())
-
-
-def pedestal_device(device_id: str = DEVICE_ID) -> dict[str, Any]:
-    """Synthetic Pedestal device object as returned by the bridge."""
-    device = load_fixture("pedestal_device.json")
-    device["id"] = device_id
-    return device
-
-
-def cloud_entry_data(token: str = TOKEN) -> dict[str, Any]:
-    return {
-        CONF_ENTRY_TYPE: ENTRY_TYPE_CLOUD,
-        CONF_BRIDGE_URL: BRIDGE_URL,
-        CONF_ACCESS_TOKEN: token,
-        CONF_ACCOUNT_ID: ACCOUNT_ID,
+def purifier_entry_data(**overrides: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        CONF_ENTRY_TYPE: ENTRY_TYPE_PURIFIER,
+        CONF_DEVICE_ID: DEVICE_ID,
+        CONF_HOST: HOST,
+        CONF_LOCAL_KEY: LOCAL_KEY,
+        CONF_PROTOCOL_VERSION: "auto",
+        CONF_DETECTED_VERSION: "3.3",
+        CONF_PRODUCT_KEY: PRODUCT_KEY,
     }
+    data.update(overrides)
+    return data
 
 
-def oauth_entry_data(refresh_token: str = "brt_grant.secret1") -> dict[str, Any]:
-    from custom_components.birdie.cloud.oauth import implementation_key
-
-    return {
-        CONF_ENTRY_TYPE: ENTRY_TYPE_CLOUD,
-        CONF_BRIDGE_URL: BRIDGE_URL,
-        CONF_ACCOUNT_ID: ACCOUNT_ID,
-        "auth_implementation": implementation_key(BRIDGE_URL),
-        "token": {
-            "access_token": "bat_current",
-            "refresh_token": refresh_token,
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "expires_at": time.time() + 3600,
-        },
-    }
-
-
-def mock_cloud_entry(*, oauth: bool = False, **kwargs: Any) -> Any:
+def mock_purifier_entry(**kwargs: Any) -> Any:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    kwargs.setdefault("data", oauth_entry_data() if oauth else cloud_entry_data())
-    return MockConfigEntry(
-        domain=DOMAIN,
-        title="jane@example.com",
-        unique_id=f"cloud_{ACCOUNT_ID}",
-        **kwargs,
-    )
+    kwargs.setdefault("data", purifier_entry_data())
+    kwargs.setdefault("unique_id", DEVICE_ID)
+    return MockConfigEntry(domain=DOMAIN, title=TITLE, **kwargs)
 
 
-class FakeBridgeClient:
-    """In-memory stand-in for ``BirdieBridgeClient`` with one Pedestal."""
+def discovered(**overrides: Any) -> DiscoveredDevice:
+    values: dict[str, Any] = {
+        "device_id": DEVICE_ID,
+        "host": HOST,
+        "protocol_version": "3.3",
+        "product_key": PRODUCT_KEY,
+        "seen_at": 0.0,
+    }
+    values.update(overrides)
+    return DiscoveredDevice(**values)
+
+
+class FakeLan:
+    """Controls the in-memory devices that replace ``TuyaLanDevice``."""
 
     def __init__(self) -> None:
-        self.account = BridgeAccount(id=ACCOUNT_ID, display_name="jane@example.com")
-        self.devices: dict[str, dict[str, Any]] = {}
-        self.commands: list[tuple[str, list[dict[str, Any]]]] = []
-        self.list_requests = 0
-        self.created_with: list[tuple[object, ...]] = []
-        # Set to an exception instance to make the next calls fail.
-        self.fail_list: Exception | None = None
-        self.fail_account: Exception | None = None
-        self.fail_command: Exception | None = None
-        self.add_device(DEVICE_ID)
+        self.dps: dict[str, Any] = copy.deepcopy(PURIFIER_DPS)
+        self.version = "3.3"
+        self.accepted_key = LOCAL_KEY
+        # Set to an exception instance to make connecting / commands fail.
+        self.connect_error: TuyaLanError | None = None
+        self.command_error: TuyaLanError | None = None
+        self.devices: list[FakeLanDevice] = []
+        self.sent: list[dict[str, Any]] = []
 
-    def add_device(self, device_id: str, *, online: bool = True, model: str = "pedestal") -> None:
-        device = pedestal_device(device_id)
-        device.update(online=online, model=model)
-        self.devices[device_id] = device
+    @property
+    def device(self) -> FakeLanDevice:
+        """The most recently created device that is still open."""
+        open_devices = [device for device in self.devices if not device.closed]
+        return open_devices[-1]
 
-    async def async_get_account(self) -> BridgeAccount:
-        if self.fail_account:
-            raise self.fail_account
-        return self.account
-
-    async def async_list_devices(self, *, include_state: bool = True) -> list[BridgeDevice]:
-        self.list_requests += 1
-        if self.fail_list:
-            raise self.fail_list
-        devices = copy.deepcopy(list(self.devices.values()))
-        if not include_state:
-            for device in devices:
-                del device["state"], device["fetched_at"]
-        return [BridgeDevice.from_json(device) for device in devices]
-
-    async def async_send_commands(self, device_id: str, commands: list[dict[str, Any]]) -> None:
-        if self.fail_command:
-            raise self.fail_command
-        if device_id not in self.devices:
-            raise BridgeDeviceNotFoundError(404, "device_not_found")
-        self.commands.append((device_id, copy.deepcopy(commands)))
-        state = self.devices[device_id]["state"]
-        for command in commands:
-            params = command["params"]
-            if command["name"] == "set_power":
-                state["power"] = params["on"]
-            elif command["name"] == "set_mode":
-                state.update(mode=params["mode"], fan_speed=None)
-            elif command["name"] == "set_fan_speed":
-                state.update(mode="manual", fan_speed=params["speed"])
-            elif command["name"] == "reset_filter":
-                state.update(filter_life_percent=100, filter_replace_needed=False)
+    def factory(self, config: DeviceConfig, **kwargs: Any) -> FakeLanDevice:
+        device = FakeLanDevice(self, config, **kwargs)
+        self.devices.append(device)
+        return device
 
 
-__all__ = ["BridgeApiError", "FakeBridgeClient"]
+class FakeLanDevice:
+    """In-memory stand-in for ``TuyaLanDevice`` (same public API)."""
+
+    def __init__(
+        self,
+        lan: FakeLan,
+        config: DeviceConfig,
+        *,
+        on_status: Callable[[dict[str, Any]], None] | None = None,
+        on_availability: Callable[[bool, TuyaLanError | None], None] | None = None,
+        on_error: Callable[[TuyaLanError], None] | None = None,
+        version_hint: str | None = None,
+        **_: Any,
+    ) -> None:
+        self._lan = lan
+        self.config = config
+        self._on_status = on_status
+        self._on_availability = on_availability
+        self._on_error = on_error
+        self.version_hint = version_hint
+        self.protocol_version: str | None = None
+        self.available = False
+        self.started = False
+        self.closed = False
+        self.last_error: TuyaLanError | None = None
+        self.dps: dict[str, Any] = {}
+
+    def _check(self) -> None:
+        if self._lan.connect_error is not None:
+            raise self._lan.connect_error
+        if self.config.local_key != self._lan.accepted_key:
+            from custom_components.birdie.tuya_lan import InvalidLocalKeyError
+
+            raise InvalidLocalKeyError("The device did not accept the local key")
+
+    async def async_connect(self) -> dict[str, Any]:
+        await asyncio.sleep(0)
+        self._check()
+        self.protocol_version = self._lan.version
+        self.dps = dict(self._lan.dps)
+        self.available = True
+        return dict(self.dps)
+
+    def start(self) -> None:
+        self.started = True
+
+    async def async_close(self) -> None:
+        self.closed = True
+
+    async def async_refresh(self) -> dict[str, Any]:
+        if not self.available:
+            raise DeviceUnreachableError("not connected")
+        self.dps = dict(self._lan.dps)
+        return dict(self.dps)
+
+    async def async_set_dps(self, dps: dict[str, Any]) -> None:
+        if self._lan.command_error is not None:
+            raise self._lan.command_error
+        if not self.available:
+            raise DeviceUnreachableError("not connected")
+        self._lan.sent.append(dict(dps))
+
+    async def async_reconfigure(self, **changes: Any) -> None:
+        from dataclasses import replace
+
+        self.config = replace(self.config, **{k: v for k, v in changes.items() if v is not None})
+
+    # --- simulate the background loop
+
+    def push(self, dps: dict[str, Any]) -> None:
+        """The device reported changed DPs."""
+        self._lan.dps.update(dps)
+        self.dps.update(dps)
+        assert self._on_status is not None
+        self._on_status(dict(self.dps))
+
+    def go_offline(self, error: TuyaLanError | None = None) -> None:
+        self.available = False
+        self.last_error = error or DeviceUnreachableError("The device stopped answering")
+        assert self._on_availability is not None
+        self._on_availability(False, self.last_error)
+
+    def fail_reconnect(self, error: TuyaLanError) -> None:
+        self.last_error = error
+        assert self._on_error is not None
+        self._on_error(error)
+
+    def come_back(self) -> None:
+        self.available = True
+        self.dps = dict(self._lan.dps)
+        assert self._on_availability is not None and self._on_status is not None
+        self._on_availability(True, None)
+        self._on_status(dict(self.dps))
+
+
+class FakeListener:
+    """Stand-in for the UDP discovery listener (no sockets)."""
+
+    instances: ClassVar[list[FakeListener]] = []
+
+    def __init__(self, devices: dict[str, DiscoveredDevice] | None = None) -> None:
+        self.devices: dict[str, DiscoveredDevice] = dict(devices or {})
+        self._callbacks: list[Callable[[DiscoveredDevice], None]] = []
+        self.started = False
+        FakeListener.instances.append(self)
+
+    @property
+    def listening(self) -> bool:
+        return self.started
+
+    def add_callback(self, callback: Callable[[DiscoveredDevice], None]) -> Callable[[], None]:
+        self._callbacks.append(callback)
+        return lambda: self._callbacks.remove(callback)
+
+    def handle(self, device: DiscoveredDevice) -> None:
+        self.devices[device.device_id] = device
+        for callback in list(self._callbacks):
+            callback(device)
+
+    async def async_start(self) -> None:
+        self.started = True
+
+    async def async_stop(self) -> None:
+        self.started = False

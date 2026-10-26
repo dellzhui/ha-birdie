@@ -1,4 +1,9 @@
-"""Config flow for the Birdie integration."""
+"""Config flow for the Birdie integration.
+
+Two kinds of entries: Birdie Bluetooth devices (Birdie Pro) and Birdie air
+purifiers, which are Tuya-based Wi-Fi devices controlled over the local
+network with their device id and local key.
+"""
 
 from __future__ import annotations
 
@@ -6,51 +11,50 @@ import asyncio
 import logging
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import urlparse
 
 import voluptuous as vol
-
 from homeassistant.components.bluetooth import (
     BluetoothScanningMode,
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
     async_register_callback,
 )
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlowResult
-from homeassistant.const import CONF_ADDRESS
-from homeassistant.data_entry_flow import section
-from homeassistant.helpers import config_entry_oauth2_flow
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import (
-    TextSelector,
-    TextSelectorConfig,
-    TextSelectorType,
-)
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.const import CONF_ADDRESS, CONF_HOST
 
 from .ble import is_birdie_advertisement, normalize_address
-from .cloud.bridge import (
-    BirdieBridgeClient,
-    BridgeAccount,
-    BridgeAuthError,
-    BridgeError,
-    StaticTokenProvider,
-)
-from .cloud.oauth import CONF_TOKEN, async_register_bridge_implementation, is_oauth_entry_data
 from .const import (
-    CONF_ACCESS_TOKEN,
-    CONF_ACCOUNT_ID,
-    CONF_BRIDGE_URL,
+    CONF_DETECTED_VERSION,
+    CONF_DEVICE_ID,
     CONF_ENTRY_TYPE,
+    CONF_LOCAL_KEY,
     CONF_NAME,
-    DEFAULT_BRIDGE_URL,
+    CONF_PRODUCT_KEY,
+    CONF_PROTOCOL_VERSION,
     DOMAIN,
-    ENTRY_TYPE_CLOUD,
+    ENTRY_TYPE_PURIFIER,
     ENVIRONMENTAL_SERVICE_UUID,
+    PURIFIER_DISCOVERY_SECONDS,
+    is_purifier_entry_data,
 )
+from .purifier.discovery import async_scan, is_birdie_purifier
+from .purifier.flow import (
+    KEY_SCHEMA,
+    MANUAL_SCHEMA,
+    RECONFIGURE_SCHEMA,
+    SECTION_ADVANCED,
+    ConnectionResult,
+    async_check_connection,
+    clean_local_key,
+)
+from .purifier.model import MODEL_NAME
+from .tuya_lan import PROTOCOL_AUTO, DeviceConfig, DiscoveredDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 DISCOVERY_TIMEOUT = 10
+PURIFIER_TITLE = f"Birdie {MODEL_NAME}"
+CHOICE_MANUAL = "manual"
 
 USER_SCHEMA = vol.Schema(
     {
@@ -60,33 +64,15 @@ USER_SCHEMA = vol.Schema(
 )
 
 
-TOKEN_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+def _form_input(user_input: dict[str, Any] | None, required: str) -> dict[str, Any] | None:
+    """Input for this step's form, or None.
 
-TOKEN_SCHEMA = vol.Schema({vol.Required(CONF_ACCESS_TOKEN): TOKEN_SELECTOR})
-SECTION_ADVANCED = "advanced"
-CLOUD_SCHEMA = vol.Schema(
-    {
-        vol.Required(SECTION_ADVANCED): section(
-            vol.Schema(
-                {
-                    vol.Optional(CONF_BRIDGE_URL): str,
-                    vol.Optional(CONF_ACCESS_TOKEN): TOKEN_SELECTOR,
-                }
-            ),
-            # Expanded while there is no production cloud to default to.
-            {"collapsed": DEFAULT_BRIDGE_URL is not None},
-        )
-    }
-)
-
-
-def _normalize_bridge_url(value: str) -> str | None:
-    """Return the bridge base URL without trailing slash, or None if invalid."""
-    url = value.strip().rstrip("/")
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+    After a progress step Home Assistant passes the progress step's input on
+    to the next step, which then has not shown its form yet.
+    """
+    if user_input is None or required not in user_input:
         return None
-    return url
+    return user_input
 
 
 def _discovery_title(discovery_info: BluetoothServiceInfoBleak) -> str:
@@ -99,30 +85,20 @@ def _is_supported(discovery_info: BluetoothServiceInfoBleak) -> bool:
     return is_birdie_advertisement(discovery_info.name, discovery_info.service_uuids)
 
 
-class BirdieConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, domain=DOMAIN):
-    """Handle a config flow for Birdie: Bluetooth devices and Birdie accounts.
+class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Birdie Bluetooth devices and air purifiers."""
 
-    The OAuth base class provides the Birdie account sign-in steps
-    (pick_implementation, auth, creation); this class keeps its own
-    Bluetooth discovery step instead of the base class's OAuth discovery.
-    """
-
-    DOMAIN = DOMAIN
     VERSION = 1
 
     def __init__(self) -> None:
         """Initialize flow state."""
-        super().__init__()
-        self._bridge_url: str | None = None
         self._discovery_info: BluetoothServiceInfoBleak | None = None
         self._discovered_devices: dict[str, str] = {}
         self._scan_complete = False
         self._scan_task: asyncio.Task[None] | None = None
-
-    @property
-    def logger(self) -> logging.Logger:
-        """Logger used by the OAuth base class."""
-        return _LOGGER
+        self._lan_task: asyncio.Task[dict[str, DiscoveredDevice]] | None = None
+        self._lan_devices: dict[str, DiscoveredDevice] = {}
+        self._purifier: DiscoveredDevice | None = None
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -162,8 +138,8 @@ class BirdieConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, domai
         )
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Let the user choose between a Bluetooth device and a Birdie account."""
-        return self.async_show_menu(step_id="user", menu_options=["ble", "cloud"])
+        """Let the user choose between a Bluetooth device and an air purifier."""
+        return self.async_show_menu(step_id="user", menu_options=["ble", "purifier"])
 
     async def async_step_ble(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle manual setup of a Bluetooth device."""
@@ -203,126 +179,247 @@ class BirdieConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, domai
             description_placeholders={"manual": "true"},
         )
 
-    async def async_step_cloud(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Add a Birdie account (cloud-connected devices such as Birdie Pedestal).
+    # ------------------------------------------------------- air purifier
 
-        Submitting opens the Birdie sign-in page. The collapsed advanced
-        section takes another cloud address and, for development bridges, a
-        static development token instead of signing in.
-        """
+    async def async_step_purifier(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Search the local network for Birdie air purifiers."""
+        if self._lan_task is None:
+            self._lan_task = self.hass.async_create_task(
+                async_scan(self.hass, PURIFIER_DISCOVERY_SECONDS)
+            )
+        if not self._lan_task.done():
+            return self.async_show_progress(
+                step_id="purifier",
+                progress_action="lan_scan",
+                progress_task=self._lan_task,
+            )
+        try:
+            found = self._lan_task.result()
+        except Exception:
+            _LOGGER.exception("Searching the network for air purifiers failed")
+            found = {}
+        configured = self._async_current_ids(include_ignore=False)
+        self._lan_devices = {
+            device_id: device
+            for device_id, device in found.items()
+            if is_birdie_purifier(device) and device_id not in configured
+        }
+        return self.async_show_progress_done(
+            next_step_id="purifier_pick" if self._lan_devices else "purifier_manual"
+        )
+
+    async def async_step_purifier_pick(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick a discovered purifier or enter one manually."""
+        user_input = _form_input(user_input, CONF_DEVICE_ID)
+        if user_input is not None:
+            choice = user_input[CONF_DEVICE_ID]
+            if choice == CHOICE_MANUAL:
+                return await self.async_step_purifier_manual()
+            self._purifier = self._lan_devices[choice]
+            return await self.async_step_purifier_key()
+        options = {
+            device_id: f"{PURIFIER_TITLE} {device_id} ({device.host})"
+            for device_id, device in self._lan_devices.items()
+        }
+        options[CHOICE_MANUAL] = "Enter manually"
+        return self.async_show_form(
+            step_id="purifier_pick",
+            data_schema=vol.Schema({vol.Required(CONF_DEVICE_ID): vol.In(options)}),
+        )
+
+    async def async_step_integration_discovery(
+        self, discovery_info: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """A Birdie purifier announced itself on the network."""
+        device_id = discovery_info[CONF_DEVICE_ID]
+        await self.async_set_unique_id(device_id)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info[CONF_HOST]})
+        self._purifier = DiscoveredDevice(
+            device_id=device_id,
+            host=discovery_info[CONF_HOST],
+            protocol_version=discovery_info.get(CONF_PROTOCOL_VERSION),
+            product_key=discovery_info.get(CONF_PRODUCT_KEY),
+            seen_at=0.0,
+        )
+        self.context["title_placeholders"] = {"name": PURIFIER_TITLE}
+        return await self.async_step_purifier_key()
+
+    async def async_step_purifier_key(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for the local key of a discovered purifier."""
+        device = self._purifier
+        assert device is not None
         errors: dict[str, str] = {}
         if user_input is not None:
-            advanced = user_input.get(SECTION_ADVANCED) or {}
-            url = _normalize_bridge_url(advanced.get(CONF_BRIDGE_URL) or DEFAULT_BRIDGE_URL or "")
-            token = (advanced.get(CONF_ACCESS_TOKEN) or "").strip()
-            if url is None:
-                errors["base"] = "invalid_url"
-            elif token:
-                account, error = await self._async_validate_cloud(url, token)
-                if account is not None:
-                    self._bridge_url = url
-                    return await self._async_finish_cloud(account, {CONF_ACCESS_TOKEN: token})
-                errors["base"] = error
+            key = clean_local_key(user_input[CONF_LOCAL_KEY])
+            if key is None:
+                errors[CONF_LOCAL_KEY] = "invalid_local_key_format"
             else:
-                self._bridge_url = url
-                return await self.async_step_cloud_oauth()
+                config = DeviceConfig(device.device_id, device.host, key)
+                result = await async_check_connection(config, device.protocol_version)
+                if result.error is None:
+                    return await self._async_create_purifier(
+                        config, result, product_key=device.product_key
+                    )
+                errors["base"] = result.error
         return self.async_show_form(
-            step_id="cloud",
-            data_schema=self.add_suggested_values_to_schema(CLOUD_SCHEMA, user_input),
+            step_id="purifier_key",
+            data_schema=KEY_SCHEMA,
+            errors=errors,
+            description_placeholders={"device_id": device.device_id, "host": device.host},
+        )
+
+    async def async_step_purifier_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Enter device id, local key and optionally the IP address."""
+        user_input = _form_input(user_input, CONF_DEVICE_ID)
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            device_id = user_input[CONF_DEVICE_ID].strip()
+            key = clean_local_key(user_input[CONF_LOCAL_KEY])
+            host = (user_input.get(CONF_HOST) or "").strip()
+            version = (user_input.get(SECTION_ADVANCED) or {}).get(
+                CONF_PROTOCOL_VERSION, PROTOCOL_AUTO
+            )
+            await self.async_set_unique_id(device_id, raise_on_progress=False)
+            self._abort_if_unique_id_configured()
+            hint: str | None = None
+            product_key: str | None = None
+            if not device_id:
+                errors[CONF_DEVICE_ID] = "invalid_device_id"
+            elif key is None:
+                errors[CONF_LOCAL_KEY] = "invalid_local_key_format"
+            elif not host:
+                found = self._lan_devices.get(device_id) or (
+                    await async_scan(self.hass, PURIFIER_DISCOVERY_SECONDS, device_id=device_id)
+                ).get(device_id)
+                if found is None:
+                    errors[CONF_HOST] = "device_not_found"
+                else:
+                    host, hint, product_key = found.host, found.protocol_version, found.product_key
+            if not errors:
+                assert key is not None
+                config = DeviceConfig(device_id, host, key, version)
+                result = await async_check_connection(config, hint)
+                if result.error is None:
+                    return await self._async_create_purifier(
+                        config, result, product_key=product_key
+                    )
+                errors["base"] = result.error
+        return self.async_show_form(
+            step_id="purifier_manual",
+            data_schema=self.add_suggested_values_to_schema(MANUAL_SCHEMA, user_input),
             errors=errors,
         )
 
-    async def async_step_cloud_oauth(
-        self, user_input: dict[str, Any] | None = None
+    async def _async_create_purifier(
+        self, config: DeviceConfig, result: ConnectionResult, *, product_key: str | None
     ) -> ConfigFlowResult:
-        """Open the Birdie sign-in page for the selected cloud."""
-        assert self._bridge_url is not None
-        key = async_register_bridge_implementation(self.hass, self._bridge_url)
-        return await self.async_step_pick_implementation({"implementation": key})
-
-    async def async_oauth_create_entry(self, data: dict[str, Any]) -> ConfigFlowResult:
-        """Identify the signed-in account, then create or update the entry."""
-        assert self._bridge_url is not None
-        account, error = await self._async_validate_cloud(
-            self._bridge_url, data[CONF_TOKEN]["access_token"]
-        )
-        if account is None:
-            return self.async_abort(reason=error)
-        return await self._async_finish_cloud(account, data)
-
-    async def _async_finish_cloud(
-        self, account: BridgeAccount, auth_data: dict[str, Any]
-    ) -> ConfigFlowResult:
-        """Create the entry, or update it when re-authenticating."""
-        if self.source == SOURCE_REAUTH:
-            entry = self._get_reauth_entry()
-            if account.id != entry.data.get(CONF_ACCOUNT_ID):
-                return self.async_abort(reason="wrong_account")
-            return self.async_update_reload_and_abort(entry, data_updates=auth_data)
-        await self.async_set_unique_id(f"cloud_{account.id}")
+        await self.async_set_unique_id(config.device_id, raise_on_progress=False)
         self._abort_if_unique_id_configured()
-        assert self._bridge_url is not None
-        return self.async_create_entry(
-            title=account.display_name or "Birdie account",
-            data={
-                CONF_ENTRY_TYPE: ENTRY_TYPE_CLOUD,
-                CONF_BRIDGE_URL: self._bridge_url,
-                CONF_ACCOUNT_ID: account.id,
-                **auth_data,
-            },
-        )
+        data: dict[str, Any] = {
+            CONF_ENTRY_TYPE: ENTRY_TYPE_PURIFIER,
+            CONF_DEVICE_ID: config.device_id,
+            CONF_HOST: config.host,
+            CONF_LOCAL_KEY: config.local_key,
+            CONF_PROTOCOL_VERSION: config.protocol_version,
+            CONF_DETECTED_VERSION: result.version,
+        }
+        if product_key:
+            data[CONF_PRODUCT_KEY] = product_key
+        return self.async_create_entry(title=PURIFIER_TITLE, data=data)
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
-        """Handle an expired Birdie sign-in or a rejected development token."""
-        self._bridge_url = entry_data[CONF_BRIDGE_URL]
-        if is_oauth_entry_data(entry_data):
-            return await self.async_step_reauth_oauth()
+        """The purifier rejects its local key, usually after it was paired again."""
         return await self.async_step_reauth_confirm()
-
-    async def async_step_reauth_oauth(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Confirm, then sign in to the same Birdie account again."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id="reauth_oauth",
-                description_placeholders={"account": self._get_reauth_entry().title},
-            )
-        return await self.async_step_cloud_oauth()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for a new development token for the same Birdie account."""
+        """Ask for the new local key."""
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
-            token = user_input[CONF_ACCESS_TOKEN].strip()
-            account, error = await self._async_validate_cloud(entry.data[CONF_BRIDGE_URL], token)
-            if account is not None:
-                return await self._async_finish_cloud(account, {CONF_ACCESS_TOKEN: token})
-            errors["base"] = error
-
+            key = clean_local_key(user_input[CONF_LOCAL_KEY])
+            if key is None:
+                errors[CONF_LOCAL_KEY] = "invalid_local_key_format"
+            else:
+                config = DeviceConfig(
+                    entry.data[CONF_DEVICE_ID],
+                    entry.data[CONF_HOST],
+                    key,
+                    entry.data.get(CONF_PROTOCOL_VERSION, PROTOCOL_AUTO),
+                )
+                result = await async_check_connection(config, entry.data.get(CONF_DETECTED_VERSION))
+                if result.error is None:
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates={CONF_LOCAL_KEY: key, CONF_DETECTED_VERSION: result.version},
+                    )
+                errors["base"] = result.error
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=TOKEN_SCHEMA,
+            data_schema=KEY_SCHEMA,
             errors=errors,
-            description_placeholders={"account": entry.title},
+            description_placeholders={"name": entry.title, "device_id": entry.data[CONF_DEVICE_ID]},
         )
 
-    async def _async_validate_cloud(self, url: str, token: str) -> tuple[BridgeAccount | None, str]:
-        """Check the bridge URL and token; return the account or an error key."""
-        client = BirdieBridgeClient(
-            async_get_clientsession(self.hass), url, StaticTokenProvider(token)
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change the local key, IP address or protocol version."""
+        entry = self._get_reconfigure_entry()
+        if not is_purifier_entry_data(entry.data):
+            return self.async_abort(reason="reconfigure_not_supported")
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            entered_key = (user_input.get(CONF_LOCAL_KEY) or "").strip()
+            key = clean_local_key(entered_key) if entered_key else entry.data[CONF_LOCAL_KEY]
+            host = user_input[CONF_HOST].strip()
+            version = (user_input.get(SECTION_ADVANCED) or {}).get(
+                CONF_PROTOCOL_VERSION, PROTOCOL_AUTO
+            )
+            if key is None:
+                errors[CONF_LOCAL_KEY] = "invalid_local_key_format"
+            elif not host:
+                errors[CONF_HOST] = "invalid_host"
+            else:
+                config = DeviceConfig(entry.data[CONF_DEVICE_ID], host, key, version)
+                result = await async_check_connection(config, entry.data.get(CONF_DETECTED_VERSION))
+                if result.error is None:
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates={
+                            CONF_LOCAL_KEY: key,
+                            CONF_HOST: host,
+                            CONF_PROTOCOL_VERSION: version,
+                            CONF_DETECTED_VERSION: result.version,
+                        },
+                    )
+                errors["base"] = result.error
+        suggested = {
+            CONF_HOST: entry.data[CONF_HOST],
+            SECTION_ADVANCED: {
+                CONF_PROTOCOL_VERSION: entry.data.get(CONF_PROTOCOL_VERSION, PROTOCOL_AUTO)
+            },
+        }
+        if user_input is not None:
+            entered = {k: v for k, v in user_input.items() if k != CONF_LOCAL_KEY}
+            suggested = {**suggested, **entered}
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(RECONFIGURE_SCHEMA, suggested),
+            errors=errors,
+            description_placeholders={"device_id": entry.data[CONF_DEVICE_ID]},
         )
-        try:
-            account = await client.async_get_account()
-            await client.async_list_devices(include_state=False)
-        except BridgeAuthError:
-            return None, "invalid_auth"
-        except BridgeError:
-            return None, "cannot_connect"
-        return account, ""
+
+    # ---------------------------------------------------------- Bluetooth
 
     async def async_step_scan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Scan briefly for Birdie Bluetooth advertisements."""

@@ -20,7 +20,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .compat import PARTS_PER_MILLION
-from .const import UNKNOWN_STATE, is_cloud_entry_data
+from .const import UNKNOWN_STATE, is_purifier_entry_data
 from .coordinator import BirdieConfigEntry, BirdieCoordinator
 from .entity import BirdieEntity
 from .models import BirdieData
@@ -86,10 +86,10 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Birdie sensors."""
-    if is_cloud_entry_data(entry.data):
-        from .cloud.sensor import async_setup_cloud_sensors
+    if is_purifier_entry_data(entry.data):
+        from .purifier.sensor import async_setup_purifier_sensors
 
-        await async_setup_cloud_sensors(hass, entry, async_add_entities)
+        await async_setup_purifier_sensors(hass, entry, async_add_entities)
         return
 
     coordinator = entry.runtime_data

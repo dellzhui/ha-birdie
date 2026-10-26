@@ -4,9 +4,8 @@
 [![Hassfest validation](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml/badge.svg)](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml)
 
 Birdie is a Home Assistant custom integration for Birdie products: Birdie BLE
-air quality monitors, including Birdie Pro, and (in development) Wi-Fi Birdie
-devices connected through a Birdie account, starting with the Birdie Pedestal
-air purifier.
+air quality monitors, including Birdie Pro, and (in development) the Birdie
+Wi-Fi air purifier, controlled directly over the local network.
 
 ## Status
 
@@ -40,23 +39,34 @@ approved, add this repository manually in HACS.
 | CO2 threshold | Number | ppm | Writable, 400-5000 ppm |
 | Cool down period | Number | min | Writable, 1-240 min |
 
-## Birdie Account Devices (In Development)
+## Birdie Air Purifier (In Development)
 
-Wi-Fi Birdie devices are added with **Add integration > Birdie > Birdie
-account**. Home Assistant talks to the Birdie cloud service, never directly to
-the device vendor's cloud, and polls every 60 seconds.
+The Wi-Fi air purifier (built on the Tuya platform) is controlled directly
+over the local network with the Tuya LAN protocol (versions 3.1 to 3.5,
+implemented by the MIT-licensed [tinytuya](https://github.com/jasonacox/tinytuya)
+library). No cloud service, cloud credentials or account sign-in is involved;
+the Birdie app is still used to pair the purifier with Wi-Fi.
 
-Users sign in on a Birdie sign-in page (OAuth), so passwords never pass
-through Home Assistant; see `docs/sign-in.md`. Until the Birdie cloud service
-is deployed, enter its address under **Advanced** in the Birdie account form.
-See also `docs/architecture.md` and `docs/bridge-api.md`.
+Setup: **Add integration > Birdie > Air purifier (Wi-Fi, local network)**.
+Home Assistant searches the network for Birdie purifiers; pick yours and enter
+its **local key**, or enter the **device ID** and local key yourself (with the
+IP address if the purifier cannot be found automatically). Both values are
+shown in the Birdie app. The local key changes when the purifier is paired
+again: Home Assistant then asks for the new key (or use **Reconfigure**).
 
-For a local demo without any real cloud, run `tools/mock_cloud.py`: it starts
-a fake Tuya cloud with one synthetic Pedestal and the bridge in front of it,
-with a development sign-in (`demo@example.com` / `demo-password`)
-(URL `http://127.0.0.1:8080`, token `demo-token`).
+Requirements and limits:
 
-Birdie Pedestal entities:
+- Home Assistant must be on the same network as the purifier and receive its
+  UDP broadcasts (ports 6666/6667) for automatic discovery; with a manual IP
+  address only TCP port 6668 is needed. Docker installs need host networking
+  for discovery.
+- Tuya devices accept few simultaneous local connections. Do not control the
+  same purifier from another local integration (for example Tuya Local or
+  LocalTuya) at the same time.
+- Give the purifier a fixed IP address (DHCP reservation) if possible. The
+  integration also follows the purifier to a new address when it announces it.
+
+Entities:
 
 | Entity | Platform | Unit | Notes |
 | --- | --- | --- | --- |
@@ -70,14 +80,20 @@ Birdie Pedestal entities:
 | Filter cover | Binary sensor | - | Diagnostic: on when the filter cover is open |
 | Reset filter | Button | - | Resets the filter counter after a filter change |
 
-The meaning of the filter replacement and filter cover values has not been
-confirmed on a real device yet.
+An entity stays unavailable until the purifier has reported the data point it
+shows. The data point mapping follows the product definition and has **not
+yet been verified on a real purifier**; see `docs/remote-testing.md`.
+
+Tools: `tools/purifier_probe.py` discovers purifiers and records what a real
+one reports (for verification on the purifier's network), and
+`tools/fake_purifier.py` runs a simulated purifier for demos. See
+`docs/architecture.md` for the design.
 
 ## Requirements
 
 Home Assistant 2026.3.0 or newer (needed for the bundled brand images; the
-Birdie account support was verified on 2026.9.2 and with the 2026.10 test
-framework).
+air purifier support was verified on 2026.9.2 against a simulated purifier and
+with the 2026.10 test framework).
 
 ## Installation
 
@@ -155,6 +171,7 @@ logger:
   default: warning
   logs:
     custom_components.birdie: debug
+    tinytuya: debug  # air purifier protocol details; local keys are redacted
 ```
 
 ## BLE Probe Tool

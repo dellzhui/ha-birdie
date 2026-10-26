@@ -1,80 +1,83 @@
-# Remote Testing With a Real Birdie Pedestal
+# Testing With a Real Birdie Air Purifier
 
-How we validate the integration against one of Birdie's real devices without
-shipping hardware. Status: ready to run as soon as Birdie provides access.
+Everything so far is verified against a simulated purifier only. The LAN
+protocol works only inside the purifier's own network: knowing the device ID
+and local key is not enough to reach it over the internet. Real-device
+testing therefore runs on a machine in Birdie's office network.
 
 ## What Birdie needs to provide
 
-1. **A Tuya cloud project that can see the Birdie app's devices.** In the
-   Tuya Developer Platform account that owns the Birdie app:
-   * Cloud > Development > Create Cloud Project, in the **same data center**
-     as the Birdie app (for Europe usually "Central Europe").
-   * Subscribe the **IoT Core** API service (normally offered on creation).
-   * Devices > **Link My App** > select the Birdie app. (An app can be linked
-     to at most two projects.)
-2. **The project's Access ID and Access Secret**, shared through a secure
-   channel (password manager share or similar, not chat or e-mail). Rotate
-   the secret after testing.
-3. **One Pedestal online** in a Birdie app account during the test window,
-   and the **Tuya UID of that app account** (shown on the cloud project's
-   device details or linked app users).
-4. Someone who can look at the purifier for a few minutes to confirm what the
-   device does when we send commands (optional but speeds things up).
+1. A purifier paired with the Birdie app, on the office Wi-Fi.
+2. Its **device ID** and **local key**. If the app cannot show them yet, the
+   Tuya Developer console of the product owner can (device details), for
+   testing only. The key changes when the purifier is paired again.
+3. A machine on the same network (wired or Wi-Fi, same subnet, broadcasts not
+   blocked), one of:
+   * Birdie's Home Assistant instance with this integration installed, or
+   * any computer with Python 3.13+ for the probe tool, optionally reachable
+     by us through a remote session Birdie sets up and controls.
+4. Someone near the purifier to watch it react and to change settings in the
+   app while the probe watches.
 
-## What we run
+Close Homey's Tuya Local app (or any other local Tuya client) during the test:
+the purifier accepts only a few local connections.
 
-Nothing is deployed; everything runs on the developer machine.
+## Step 1: Probe (no Home Assistant needed)
 
 ```bash
-# 1. Credentials (git-ignored file)
-cp bridge/.env.example bridge/.env.local      # TUYA_ACCESS_ID / SECRET / REGION
-set -a; . bridge/.env.local; set +a
+git clone <this repository> && cd <repository>
+python -m venv .venv && . .venv/bin/activate
+pip install tinytuya==1.20.0
 
-# 2. Read-only checks with the CLI
-birdie-tuya token
-birdie-tuya user-devices <tuya_uid>          # device id, product id, online, status
-birdie-tuya spec <device_id>                 # authoritative DP types and ranges
+# Which Tuya devices announce themselves? (the purifier should be listed
+# as "Birdie purifier"; note the IP and protocol version)
+python -m tools.purifier_probe discover
 
-# 3. Bridge in development mode, mapped to that one test user
-export BRIDGE_ENV=development
-export BRIDGE_DEV_TOKENS="<random token>=<tuya_uid>"
-python -m birdie_bridge
+# Read-only: connect, print all DPs, watch changes for 60 s.
+# Change mode/speed in the Birdie app and open the filter cover meanwhile.
+export BIRDIE_LOCAL_KEY='<local key>'   # or leave unset to be prompted
+python -m tools.purifier_probe read --device-id <device id> --watch 60 --report read.json
 
-# 4. Home Assistant: Add integration > Birdie > Birdie account
-#    URL http://<dev machine>:8080, token = the random token
+# Changes the purifier state (power off/on, every mode and speed), then
+# restores power and mode. --include-filter-reset also resets the filter counter.
+python -m tools.purifier_probe test --device-id <device id> --yes --report test.json
 ```
 
-The bridge only exposes that user's devices of known Birdie products and only
-forwards `switch`, `mode` and `reset_filter` commands.
+The reports contain no local key and no IP address (unless `--keep-ip`).
+Send `read.json` and `test.json` to the developers.
+
+## Step 2: Home Assistant
+
+Install the integration (HACS custom repository or copy
+`custom_components/birdie`), restart, then **Add integration > Birdie >
+Air purifier (Wi-Fi, local network)**. Home Assistant OS and host-network
+Docker installs can discover the purifier; otherwise enter its IP address.
+Download the diagnostics from the device page afterwards (key and IP are
+redacted).
 
 ## Checklist
 
-Record results (with the diagnostics download from the Home Assistant device
-page) and `birdie-tuya status` for the raw DPs. Where an assumption was
-wrong, update `bridge/birdie_bridge/pedestal.py`; the Home Assistant
-integration does not see Tuya DPs and needs no change.
-
-| # | Check | How | Expected / question |
-|---|---|---|---|
-| 1 | Product id | `user-devices` | Matches `a2zf7q0zxcutn5dy`; is it the production PID? |
-| 2 | DP types match the console | `spec` | Boolean/Integer/Enum as in the console screenshot |
-| 3 | Power on/off | Fan toggle in HA | Device turns on/off; `switch` reported back |
-| 4 | Speeds | Fan 25/50/75/100 % | Tuya `mode` becomes `manual1`..`manual4`; airflow changes |
-| 5 | Presets | Auto, Sleep | `mode` becomes `auto` / `sleep` |
-| 6 | Mode while off | Set speed when off | Does the device accept `mode` while off, or must it be on first? |
-| 7 | PM2.5 | Sensor vs app | Same value as the Birdie app; update interval? |
-| 8 | Air quality | Sensor vs app | Same level as the app |
-| 9 | Filter life | Sensor vs app | Total/used minutes plausible; matches app percentage |
-| 10 | `filter_status` meaning | Ask / observe | Is `true` "replace filter" or "OK"? |
-| 11 | `filter_cover` meaning | Open the cover | Is `true` "open" or "closed"? |
-| 12 | Filter reset | Button in HA | Does `filter_used_minutes` go to 0? Does `reset_filter` report back `false`? |
-| 13 | `device_error` | Ask Birdie | Meaning of `fan`, `pm25`, `ocp` |
-| 14 | Offline | Unplug device | Entities become unavailable within one poll; commands show "device offline" |
-| 15 | Back online | Plug in | Entities recover without reloading |
-| 16 | Name | HA device name | Uses the name given in the Birdie app |
+| # | Check | Result |
+|---|---|---|
+| 1 | `discover` lists the purifier with product ID `a2zf7q0zxcutn5dy`; protocol version: ___ | |
+| 2 | `read` connects with protocol "auto"; all DPs and their types recorded | |
+| 3 | DPs present: 1, 2, 3, 21, 105, 106, 107, 108, 109, 110, 111 (note missing/extra) | |
+| 4 | Changes made in the app arrive as pushes within a few seconds | |
+| 5 | Power off/on from the probe / Home Assistant | |
+| 6 | Modes auto, sleep and speeds manual1-4 | |
+| 7 | PM2.5 value plausible, unit/scale | |
+| 8 | air_quality values seen: ___ | |
+| 9 | filter_total/used minutes plausible; filter life % matches the app | |
+| 10 | filter_status value when a replacement is due (if it can be triggered) | |
+| 11 | filter_cover value with the cover open | |
+| 12 | reset_filter: accepted? counter reset? (only with consent) | |
+| 13 | device_error values (if a fault can be simulated) | |
+| 14 | Unplug the purifier: entities unavailable; plug in: back without restart | |
+| 15 | Pair the purifier again in the app: Home Assistant asks for the new key, works after entering it | |
+| 16 | Birdie app still works while Home Assistant is connected | |
+| 17 | Router assigns a new IP: Home Assistant follows (or Reconfigure works) | |
 
 ## After testing
 
-* Ask Birdie to rotate the Access Secret if it was shared for testing.
-* Save redacted real responses as `*_captured.json` fixtures (remove
-  `local_key`, `ip`, `uid`, coordinates) and add tests for them.
+Update `purifier/model.py` (DPs, assumptions marked ASSUMPTION) and the tests
+from the reports, and record here which checks passed **on the real device**.
