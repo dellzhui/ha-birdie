@@ -24,9 +24,11 @@ approved, add this repository manually in HACS.
 - Disconnect handling with unavailable entity states.
 - Writable configuration entities for CO2 threshold and cool down period.
 - Standalone BLE probe tool for setup verification and diagnostics.
+- Birdie Wi-Fi air purifier over the local network (in development, see
+  below).
 - Birdie Pro firmware `1.6.0` and `1.6.1` BLE UUID compatibility.
 
-## Entities
+## Birdie Pro Entities (Bluetooth)
 
 | Entity | Platform | Unit | Notes |
 | --- | --- | --- | --- |
@@ -41,53 +43,25 @@ approved, add this repository manually in HACS.
 
 ## Birdie Air Purifier (In Development)
 
-The Wi-Fi air purifier (built on the Tuya platform) is controlled directly
-over the local network with the Tuya LAN protocol (versions 3.1 to 3.5,
-implemented by the MIT-licensed [tinytuya](https://github.com/jasonacox/tinytuya)
-library). No cloud service, cloud credentials or account sign-in is involved;
-the Birdie app is still used to pair the purifier with Wi-Fi.
+The Wi-Fi air purifier is controlled directly over the local network. No
+cloud service, Tuya account or Birdie sign-in is involved: copy the purifier's
+**device ID** and **local key** from the Birdie app, then add it with
+**Add integration > Birdie > Air purifier (Wi-Fi, local network)**. Home
+Assistant finds the purifier on the network, or you enter its IP address.
 
-Setup: **Add integration > Birdie > Air purifier (Wi-Fi, local network)**.
-Home Assistant searches the network for Birdie purifiers; pick yours and enter
-its **local key**, or enter the **device ID** and local key yourself (with the
-IP address if the purifier cannot be found automatically). Both values are
-shown in the Birdie app. The local key changes when the purifier is paired
-again: Home Assistant then asks for the new key (or use **Reconfigure**).
+Entities: fan (on/off, 4 speeds, presets `auto` and `sleep`), PM2.5, air
+quality, filter life and time remaining, filter replacement, filter cover,
+device status and a reset filter button.
 
-Requirements and limits:
+Setup, network requirements, key changes and troubleshooting:
+**[docs/air-purifier.md](docs/air-purifier.md)**.
 
-- Home Assistant must be on the same network as the purifier and receive its
-  UDP broadcasts (ports 6666/6667) for automatic discovery; with a manual IP
-  address only TCP port 6668 is needed. Docker installs need host networking
-  for discovery.
-- Tuya devices accept few simultaneous local connections. Do not control the
-  same purifier from another local integration (for example Tuya Local or
-  LocalTuya) at the same time.
-- Give the purifier a fixed IP address (DHCP reservation) if possible. The
-  integration also follows the purifier to a new address when it announces it.
-
-Entities:
-
-| Entity | Platform | Unit | Notes |
-| --- | --- | --- | --- |
-| Purifier | Fan | - | On/off, 4 speeds (25/50/75/100 %), presets `auto` and `sleep` |
-| PM2.5 | Sensor | ug/m3 | Particulate matter |
-| Air quality | Sensor | - | `good`, `moderate`, `poor`, `very_poor` |
-| Filter life | Sensor | % | Remaining filter life |
-| Filter time remaining | Sensor | days | Remaining filter time |
-| Device status | Sensor | - | Diagnostic: `none` (normal), `fan`, `pm25_sensor`, `overcurrent` |
-| Filter replacement | Binary sensor | - | On when the filter should be replaced |
-| Filter cover | Binary sensor | - | Diagnostic: on when the filter cover is open |
-| Reset filter | Button | - | Resets the filter counter after a filter change |
-
-An entity stays unavailable until the purifier has reported the data point it
-shows. The data point mapping follows the product definition and has **not
-yet been verified on a real purifier**; see `docs/remote-testing.md`.
-
-Tools: `tools/purifier_probe.py` discovers purifiers and records what a real
-one reports (for verification on the purifier's network), and
-`tools/fake_purifier.py` runs a simulated purifier for demos. See
-`docs/architecture.md` for the design.
+The data point mapping follows the product definition and has **not yet been
+verified on a real purifier** ([docs/remote-testing.md](docs/remote-testing.md));
+it is tested against a simulated purifier. Design notes:
+[docs/architecture.md](docs/architecture.md). Tools:
+`tools/purifier_probe.py` checks a real purifier without Home Assistant,
+`tools/fake_purifier.py` runs a simulated one.
 
 ## Requirements
 
@@ -219,6 +193,11 @@ Implemented:
 - Native Bluetooth and ESPHome Bluetooth Proxy connection paths.
 - Birdie Pro firmware `1.6.0` and `1.6.1` UUID compatibility.
 - HACS-compatible repository structure and validation workflows.
+
+- Birdie Wi-Fi air purifier over the local network (Tuya LAN protocol 3.1-3.5
+  through [tinytuya](https://github.com/jasonacox/tinytuya)): discovery, UI
+  setup, local key updates, fan, sensors, binary sensors and filter reset.
+  Verified against a simulated purifier only.
 
 Not implemented:
 

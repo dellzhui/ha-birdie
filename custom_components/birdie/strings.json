@@ -51,7 +51,7 @@
       },
       "purifier_key": {
         "title": "Add Birdie air purifier",
-        "description": "Enter the local key of the air purifier with device ID {device_id} ({host}). The Birdie app shows the device ID and local key in the device settings.",
+        "description": "Enter the local key of the air purifier with device ID {device_id} ({host}). Copy it from the Birdie app.",
         "data": {
           "local_key": "Local key"
         }
