@@ -38,3 +38,6 @@ __pycache__/
 .venv/
 !.env.example
 *.egg-info/
+
+# Built probe kits
+dist/

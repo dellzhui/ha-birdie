@@ -14,7 +14,7 @@ testing therefore runs on a machine in Birdie's office network.
 3. A machine on the same network (wired or Wi-Fi, same subnet, broadcasts not
    blocked), one of:
    * Birdie's Home Assistant instance with this integration installed, or
-   * any computer with Python 3.13+ for the probe tool, optionally reachable
+   * any computer with Python 3.11+ for the probe tool, optionally reachable
      by us through a remote session Birdie sets up and controls.
 4. Someone near the purifier to watch it react and to change settings in the
    app while the probe watches.
@@ -24,8 +24,11 @@ the purifier accepts only a few local connections.
 
 ## Step 1: Probe (no Home Assistant needed)
 
+The developers send a probe kit (`python -m tools.build_probe_kit` builds
+`dist/birdie-purifier-probe-<version>.zip`; its `README.txt` has the same
+steps for macOS, Linux and Windows). From a clone of this repository instead:
+
 ```bash
-git clone <this repository> && cd <repository>
 python -m venv .venv && . .venv/bin/activate
 pip install tinytuya==1.20.0
 
