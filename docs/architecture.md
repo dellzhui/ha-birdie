@@ -106,12 +106,16 @@ product ID `a2zf7q0zxcutn5dy`.
 * One config entry per purifier (unique ID = Tuya device ID). Entry data:
   device ID, host, local key, configured protocol ("auto" by default) and the
   detected version as a hint for the next start.
-* Setup connects once: unreachable -> setup retried by Home Assistant; key
-  rejected -> re-authentication flow asking for the new key.
+* Setup connects once. Unreachable: look for the purifier's announcement and
+  connect at its new address if it moved, otherwise Home Assistant retries
+  setup. Key rejected: retried too, and only the third rejection in a row
+  starts re-authentication, because with protocol 3.4/3.5 a busy or slow
+  purifier fails the handshake exactly like a wrong key (tinytuya error 914).
 * At runtime the device pushes changes; entities go unavailable when the
   connection is lost and come back with it. Three consecutive key rejections
   while reconnecting start re-authentication (a single rejection can also be
-  a rebooting device).
+  a rebooting device); a re-authentication request is withdrawn when the
+  stored key works again.
 * Each entity declares the DPs it shows and stays unavailable until the
   device has reported them, because the LAN protocol may not expose every DP
   of the product definition. The filter reset button is not tied to a

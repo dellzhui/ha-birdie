@@ -94,6 +94,8 @@ class FakeLan:
         # Set to an exception instance to make connecting / commands fail.
         self.connect_error: TuyaLanError | None = None
         self.command_error: TuyaLanError | None = None
+        # Addresses where nothing answers (the purifier moved away).
+        self.unreachable_hosts: set[str] = set()
         self.devices: list[FakeLanDevice] = []
         self.sent: list[dict[str, Any]] = []
 
@@ -139,6 +141,8 @@ class FakeLanDevice:
     def _check(self) -> None:
         if self._lan.connect_error is not None:
             raise self._lan.connect_error
+        if self.config.host in self._lan.unreachable_hosts:
+            raise DeviceUnreachableError("no answer")
         if self.config.local_key != self._lan.accepted_key:
             from custom_components.birdie.tuya_lan import InvalidLocalKeyError
 

@@ -150,6 +150,8 @@ class TuyaLanDevice:
         self._last_status = 0.0
         self._refresh_at: float | None = None
         self._available = False
+        # The tinytuya object being connected in _w_open, so close() can abort it.
+        self._opening: tinytuya.Device | None = None
         self.last_error: TuyaLanError | None = None
         register_secret(config.local_key)
 
@@ -357,12 +359,12 @@ class TuyaLanDevice:
             raise DeviceUnreachableError("The device is not connected")
 
     def _interrupt_socket(self) -> None:
-        """Wake a worker blocked in recv() so shutdown is quick."""
-        api = self._api
-        sock = getattr(api, "socket", None) if api is not None else None
-        if sock is not None:
-            with contextlib.suppress(OSError):
-                sock.shutdown(socket.SHUT_RDWR)
+        """Wake a worker blocked in recv() or a handshake so shutdown is quick."""
+        for api in (self._api, self._opening):
+            sock = getattr(api, "socket", None) if api is not None else None
+            if sock is not None:
+                with contextlib.suppress(OSError):
+                    sock.shutdown(socket.SHUT_RDWR)
 
     async def _call(self, func: Callable[..., Any], *args: Any) -> Any:
         return await asyncio.get_running_loop().run_in_executor(self._executor, func, *args)
@@ -403,8 +405,13 @@ class TuyaLanDevice:
         self._w_drop()
         errors: list[TuyaLanError] = []
         for version in self._versions_to_try():
-            api = self._new_api(version)
-            result = api.status()
+            if self._closed:
+                raise DeviceUnreachableError("The device connection is closed")
+            api = self._opening = self._new_api(version)
+            try:
+                result = api.status()
+            finally:
+                self._opening = None
             dps = _dps_of(result)
             if dps is not None and api.socket is not None:
                 self._api = api

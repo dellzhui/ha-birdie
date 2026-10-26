@@ -33,8 +33,12 @@ def lan_broadcasts() -> Iterator[dict[str, DiscoveredDevice]]:
     async def create(hass: Any) -> FakeListener:
         return FakeListener(devices)
 
-    with patch(
-        "custom_components.birdie.purifier.discovery._async_create_listener", side_effect=create
+    with (
+        patch(
+            "custom_components.birdie.purifier.discovery._async_create_listener",
+            side_effect=create,
+        ),
+        patch("custom_components.birdie.purifier.coordinator.PURIFIER_DISCOVERY_SECONDS", 0),
     ):
         yield devices
 

@@ -292,6 +292,24 @@ async def test_close_is_quick_and_idempotent(
     await wait_for(lambda: device.open_connections == 0)
 
 
+async def test_close_aborts_a_connection_attempt() -> None:
+    """Closing while connecting to a silent device does not wait for every protocol."""
+    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.4", dict(INITIAL_DPS), silent=True)
+    await fake.start()
+    device = TuyaLanDevice(
+        DeviceConfig(DEVICE_ID, "127.0.0.1", LOCAL_KEY, port=fake.port),
+        timings=Timings(connect_timeout=5.0),
+    )
+    try:
+        device.start()
+        await wait_for(lambda: fake.connections_total > 0)
+        async with asyncio.timeout(2):
+            await device.async_close()
+    finally:
+        await device.async_close()
+        await fake.stop()
+
+
 async def test_local_key_not_logged(
     make_client: Callable[..., Client], caplog: pytest.LogCaptureFixture
 ) -> None:

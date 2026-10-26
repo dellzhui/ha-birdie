@@ -31,12 +31,22 @@ from pytest_homeassistant_custom_component.components.diagnostics import (
 )
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
-from custom_components.birdie.const import CONF_DETECTED_VERSION, DOMAIN
-from custom_components.birdie.tuya_lan import DeviceUnreachableError, InvalidLocalKeyError
+from custom_components.birdie.const import (
+    CONF_DETECTED_VERSION,
+    DOMAIN,
+    PURIFIER_KEY_FAILURES_BEFORE_REAUTH,
+)
+from custom_components.birdie.purifier.coordinator import DATA_SETUP_KEY_FAILURES
+from custom_components.birdie.tuya_lan import (
+    DeviceUnreachableError,
+    DiscoveredDevice,
+    InvalidLocalKeyError,
+)
 
 from .helpers import (
     DEVICE_ID,
     FAN,
+    HOST,
     LOCAL_KEY,
     FakeLan,
     FakeListener,
@@ -219,10 +229,57 @@ async def test_wrong_key_at_startup_starts_reauth(hass: HomeAssistant, fake_lan:
     entry = mock_purifier_entry()
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
+    # A busy purifier fails the 3.4/3.5 handshake like a wrong key: retry first.
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+
+    for _ in range(PURIFIER_KEY_FAILURES_BEFORE_REAUTH - 1):
+        await hass.config_entries.async_reload(entry.entry_id)
     assert entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
     assert all(device.closed for device in fake_lan.devices)
+
+
+async def test_key_rejected_once_at_startup(hass: HomeAssistant, fake_lan: FakeLan) -> None:
+    fake_lan.accepted_key = "another-key-0000"  # e.g. busy during the handshake
+    entry = mock_purifier_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+
+    fake_lan.accepted_key = LOCAL_KEY
+    await hass.config_entries.async_reload(entry.entry_id)
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.entry_id not in hass.data[DATA_SETUP_KEY_FAILURES]
+
+
+async def test_moved_purifier_is_found_at_startup(
+    hass: HomeAssistant, fake_lan: FakeLan, lan_broadcasts: dict[str, DiscoveredDevice]
+) -> None:
+    """New address while Home Assistant was off: follow the announcement."""
+    fake_lan.unreachable_hosts.add(HOST)
+    lan_broadcasts[DEVICE_ID] = discovered(host="192.168.1.77")
+    entry = mock_purifier_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data[CONF_HOST] == "192.168.1.77"
+
+
+async def test_reauth_dismissed_when_the_key_works_again(
+    hass: HomeAssistant, entry, fake_lan: FakeLan
+) -> None:
+    device = fake_lan.device
+    device.go_offline()
+    for _ in range(PURIFIER_KEY_FAILURES_BEFORE_REAUTH):
+        device.fail_reconnect(InvalidLocalKeyError("busy during the handshake"))
+    await hass.async_block_till_done()
+    assert hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+
+    device.come_back()
+    await hass.async_block_till_done()
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
 
 
 async def test_repeated_key_rejection_starts_reauth(

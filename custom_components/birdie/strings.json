@@ -14,7 +14,7 @@
       "invalid_host": "Enter the IP address of the air purifier.",
       "device_not_found": "The air purifier was not found on the local network. Enter its IP address.",
       "cannot_connect": "Cannot connect to the air purifier. Check that it is on, connected to Wi-Fi and reachable from Home Assistant.",
-      "invalid_local_key": "The air purifier did not accept the local key. The key changes whenever the purifier is paired again in the Birdie app; copy the current key.",
+      "invalid_local_key": "The air purifier did not accept the connection. Copy the current local key from the Birdie app (it changes whenever the purifier is paired again) and close other apps that control the purifier on the local network, then try again.",
       "unknown": "Unexpected error. See the Home Assistant log for details."
     },
     "progress": {
