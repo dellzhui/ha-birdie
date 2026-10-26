@@ -52,12 +52,21 @@ Send `read.json` and `test.json` to the developers.
 
 ## Step 2: Home Assistant
 
-Install the integration (HACS custom repository or copy
-`custom_components/birdie`), restart, then **Add integration > Birdie >
-Air purifier (Wi-Fi, local network)**. Home Assistant OS and host-network
-Docker installs can discover the purifier; otherwise enter its IP address.
-Download the diagnostics from the device page afterwards (key and IP are
-redacted).
+Preferably use a purifier with a working PM2.5 sensor.
+
+1. Install the beta (`v0.2.0b1` or later): in HACS open **Birdie**, choose
+   **Redownload** in the menu and select the beta version (pre-releases may
+   have to be enabled for the repository first). Without HACS, copy
+   `custom_components/birdie` from the release into the Home Assistant
+   `config/custom_components` folder. Restart Home Assistant.
+2. Close other local controllers of the purifier (Homey Tuya Local, the
+   probe tool).
+3. **Add integration > Birdie > Air purifier (Wi-Fi, local network)**. Home
+   Assistant OS and host-network Docker installs should list the purifier
+   (checklist item 1); otherwise choose manual entry and give the IP address.
+4. Work through checklist items 5-9 and 14-17 from Home Assistant.
+5. Download the diagnostics from the device page (key and IP are redacted)
+   and send them with notes on each item.
 
 ## Checklist
 
