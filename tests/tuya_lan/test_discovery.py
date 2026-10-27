@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import socket
 
 import pytest
@@ -88,20 +89,45 @@ async def test_discover_times_out_and_cleans_up() -> None:
     assert found == {}
 
 
-@pytest.mark.usefixtures("socket_enabled")
-async def test_request_broadcast_is_sent() -> None:
+async def _requests_received(search: bool, *, request: bool = True) -> list[bytes]:
+    """Datagrams a fake request port gets from a listener, optionally searching."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as receiver:
         receiver.bind(("127.0.0.1", 0))
         receiver.setblocking(False)
-        port = receiver.getsockname()[1]
         listener = DiscoveryListener(
-            ports=(0,), bind_host="127.0.0.1", request_port=port, request_host="127.0.0.1"
+            ports=(0,),
+            bind_host="127.0.0.1",
+            request_port=receiver.getsockname()[1],
+            request_host="127.0.0.1",
         )
         await listener.async_start()
         try:
-            loop = asyncio.get_running_loop()
-            async with asyncio.timeout(2):
-                data = await loop.sock_recv(receiver, 1024)
+            if search:
+                await async_discover(0.2, listener=listener, request=request)
+            else:
+                await asyncio.sleep(0.2)
         finally:
             await listener.async_stop()
-    assert data.startswith(b"\x00\x00\x66\x99")
+        received = []
+        with contextlib.suppress(BlockingIOError):
+            while True:
+                received.append(receiver.recv(1024))
+        return received
+
+
+@pytest.mark.usefixtures("socket_enabled")
+async def test_listener_alone_sends_no_requests() -> None:
+    """Every Tuya device answers a request; a background listener only listens."""
+    assert await _requests_received(search=False) == []
+
+
+@pytest.mark.usefixtures("socket_enabled")
+async def test_search_sends_requests() -> None:
+    received = await _requests_received(search=True)
+    assert received
+    assert all(data.startswith(b"\x00\x00\x66\x99") for data in received)
+
+
+@pytest.mark.usefixtures("socket_enabled")
+async def test_search_can_only_listen() -> None:
+    assert await _requests_received(search=True, request=False) == []

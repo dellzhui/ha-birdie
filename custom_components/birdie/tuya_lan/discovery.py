@@ -2,7 +2,9 @@
 
 Tuya Wi-Fi devices announce themselves every few seconds: protocol 3.1 in
 plain text on UDP port 6666, 3.3 and later encrypted with a well-known key on
-port 6667. Some 3.5 devices only answer a request broadcast to port 7000.
+port 6667. Some 3.5 devices only answer a request broadcast to port 7000;
+every Tuya device on the network answers such a request, so it is sent only
+while actively searching (``async_discover``), never by a listener on its own.
 Decryption is tinytuya's. Sockets are opened with SO_REUSEADDR/SO_REUSEPORT so
 other Tuya integrations can listen on the same ports.
 """
@@ -111,7 +113,6 @@ class DiscoveryListener:
         self._request_host = request_host
         self._request_source_ip = request_source_ip
         self._transports: list[asyncio.DatagramTransport] = []
-        self._request_task: asyncio.Task[None] | None = None
         self._callbacks: list[Callable[[DiscoveredDevice], None]] = []
         self.devices: dict[str, DiscoveredDevice] = {}
 
@@ -152,36 +153,25 @@ class DiscoveryListener:
                 continue
             transport, _ = await loop.create_datagram_endpoint(lambda: _Protocol(self), sock=sock)
             self._transports.append(transport)
-        if self._request_port is not None and self._transports:
-            self._request_task = loop.create_task(self._send_requests())
 
     async def async_stop(self) -> None:
-        if self._request_task is not None:
-            self._request_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._request_task
-            self._request_task = None
         for transport in self._transports:
             transport.close()
         self._transports.clear()
 
-    async def _send_requests(self) -> None:
-        """Ask devices that only answer requests to announce themselves."""
-        assert self._request_port is not None
+    async def async_request(self) -> None:
+        """Broadcast one discovery request; devices answer with an announcement."""
+        if self._request_port is None or not self._transports:
+            return
         payload = _request_payload(self._request_source_ip)
         loop = asyncio.get_running_loop()
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.setblocking(False)
-        try:
-            while True:
-                try:
-                    await loop.sock_sendto(sock, payload, (self._request_host, self._request_port))
-                except OSError as err:
-                    _LOGGER.debug("Discovery request broadcast failed: %s", err)
-                await asyncio.sleep(REQUEST_INTERVAL)
-        finally:
-            sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.setblocking(False)
+            try:
+                await loop.sock_sendto(sock, payload, (self._request_host, self._request_port))
+            except OSError as err:
+                _LOGGER.debug("Discovery request broadcast failed: %s", err)
 
 
 def _udp_socket(host: str, port: int) -> socket.socket:
@@ -205,12 +195,15 @@ async def async_discover(
     *,
     device_id: str | None = None,
     listener: DiscoveryListener | None = None,
+    request: bool = True,
     **listener_kwargs: Any,
 ) -> dict[str, DiscoveredDevice]:
     """Collect announcements for ``seconds``.
 
     With ``device_id``, return as soon as that device is seen. An already
-    running ``listener`` is reused (its cached announcements included).
+    running ``listener`` is reused (its cached announcements included). With
+    ``request``, a discovery request is broadcast at the start and every
+    ``REQUEST_INTERVAL`` seconds of the search; otherwise this only listens.
     """
     own = listener is None
     active = listener or DiscoveryListener(**listener_kwargs)
@@ -227,8 +220,16 @@ async def async_discover(
         if own:
             await active.async_start()
         if device_id is None or device_id not in found:
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(done.wait(), seconds)
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + seconds
+            while True:
+                if request:
+                    await active.async_request()
+                remaining = max(0.0, deadline - loop.time())
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(done.wait(), min(REQUEST_INTERVAL, remaining))
+                if done.is_set() or loop.time() >= deadline:
+                    break
     finally:
         remove()
         if own:

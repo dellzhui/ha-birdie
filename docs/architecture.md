@@ -97,6 +97,11 @@ product ID `a2zf7q0zxcutn5dy`.
 * While a purifier is set up, one shared listener follows configured
   purifiers to a new IP address and offers newly seen Birdie purifiers as
   discovered devices in the UI.
+* The discovery request (UDP 7000) is answered by every Tuya device on the
+  network, so it is broadcast only during a search: the 6 s config flow
+  search and the address lookup when setup cannot reach the purifier. The
+  shared listener never sends anything. The Podium (protocol 3.4) announces
+  itself without a request.
 * Sockets use SO_REUSEADDR/SO_REUSEPORT to coexist with other Tuya
   integrations. Containers need host networking to receive broadcasts.
 

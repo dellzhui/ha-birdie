@@ -217,6 +217,7 @@ class FakeListener:
         self.devices: dict[str, DiscoveredDevice] = dict(devices or {})
         self._callbacks: list[Callable[[DiscoveredDevice], None]] = []
         self.started = False
+        self.requests = 0
         FakeListener.instances.append(self)
 
     @property
@@ -237,3 +238,6 @@ class FakeListener:
 
     async def async_stop(self) -> None:
         self.started = False
+
+    async def async_request(self) -> None:
+        self.requests += 1
