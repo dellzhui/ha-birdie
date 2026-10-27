@@ -9,7 +9,9 @@ Wi-Fi air purifier, controlled directly over the local network.
 
 ## Status
 
-Current release: `v0.1.3`
+Current release: `v0.1.3`. Beta with the Birdie Podium air purifier:
+`v0.2.0b2` (HACS pre-release, see
+[docs/remote-testing.md](docs/remote-testing.md)).
 
 The integration is available for installation through HACS as a custom
 repository. Submission to the HACS default repository is in progress; until it is
@@ -44,8 +46,9 @@ approved, add this repository manually in HACS.
 ## Birdie Podium Air Purifier (In Development)
 
 The Birdie Podium Wi-Fi air purifier is controlled directly over the local network. No
-cloud service, Tuya account or Birdie sign-in is involved: copy the purifier's
-**device ID** and **local key** from the Birdie app, then add it with
+cloud service, Tuya account or Birdie sign-in is involved: the Birdie app
+shows the purifier's **device ID** and **local key** (long-press to copy);
+add it with
 **Add integration > Birdie > Podium air purifier (Wi-Fi, local network)**. Home
 Assistant finds the purifier on the network, or you enter its IP address.
 
@@ -67,8 +70,8 @@ Design notes:
 ## Requirements
 
 Home Assistant 2026.3.0 or newer (needed for the bundled brand images; the
-air purifier support was verified on 2026.9.2 against a simulated purifier and
-with the 2026.10 test framework).
+air purifier support was verified on 2026.9.2 and 2026.10.4 against a
+simulated purifier and with the 2026.10 test framework).
 
 ## Installation
 

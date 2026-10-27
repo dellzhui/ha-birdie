@@ -14,7 +14,9 @@ purifier inside your home network.
 ## What you need
 
 * The purifier set up in the **Birdie app** and connected to your Wi-Fi.
-* Its **device ID** and **local key**, shown in the Birdie app.
+* Its **device ID** and **local key**, shown in the Birdie app. Long-press
+  either value in the app to copy it. Tip: open Home Assistant on the same
+  phone and you can paste it straight away.
 * Home Assistant 2026.3.0 or newer, with the Birdie integration installed
   (see the [README](../README.md#installation)). The protocol library
   (`tinytuya`) is installed by Home Assistant automatically.
@@ -42,10 +44,13 @@ logs and diagnostics.
 2. Choose **Podium air purifier (Wi-Fi, local network)**. Home Assistant searches
    the network for a few seconds.
 3. Then either:
-   * **The purifier is listed:** select it and enter its **local key**.
-   * **It is not listed** (or you choose *Enter manually*): enter the
-     **device ID** and **local key**. Leave the IP address empty to search for
-     that device ID, or enter the IP address if the search does not find it.
+   * **The purifier is listed:** select it, then copy its **local key** in the
+     Birdie app (long-press) and paste it. If you have more than one purifier,
+     compare the device ID in the list with the one in the app.
+   * **It is not listed** (or you choose *Enter manually*): paste the
+     **device ID** and **local key** from the app. Leave the IP address empty
+     to search for that device ID, or enter the IP address if the search does
+     not find it.
 4. Home Assistant connects to the purifier to check the key before it adds
    the device. The protocol version is detected automatically; the
    **Advanced** section lets you choose one if detection fails (the
@@ -121,8 +126,8 @@ The local key changes whenever the purifier is set up again in the Birdie app
 (for example after a reset or a new Wi-Fi network). Home Assistant then loses
 the connection, the entities become unavailable, and after a few rejected
 attempts it shows **Re-authentication required** for the purifier under
-**Settings > Devices & services**. Open it and enter the new key from the
-Birdie app.
+**Settings > Devices & services**. Open it, copy the new key in the Birdie
+app (long-press) and paste it.
 
 You can also change the key at any time: open the purifier's integration
 entry, select the three-dot menu and **Reconfigure**. Reconfigure also

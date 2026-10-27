@@ -36,5 +36,5 @@
   "issue_tracker": "https://github.com/dellzhui/ha-birdie/issues",
   "loggers": ["tinytuya"],
   "requirements": ["tinytuya==1.20.0"],
-  "version": "0.2.0b1"
+  "version": "0.2.0b2"
 }
