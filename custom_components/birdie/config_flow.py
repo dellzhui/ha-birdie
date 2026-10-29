@@ -207,7 +207,7 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             if is_birdie_purifier(device) and device_id not in configured
         }
         return self.async_show_progress_done(
-            next_step_id="purifier_pick" if self._lan_devices else "purifier_manual"
+            next_step_id="purifier_pick" if self._lan_devices else "purifier_not_found"
         )
 
     async def async_step_purifier_pick(
@@ -274,10 +274,21 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"device_id": device.device_id, "host": device.host},
         )
 
+    async def async_step_purifier_not_found(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The search found no new purifier; the manual form says so."""
+        return await self._async_purifier_manual("purifier_not_found", user_input)
+
     async def async_step_purifier_manual(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Enter device id, local key and optionally the IP address."""
+        return await self._async_purifier_manual("purifier_manual", user_input)
+
+    async def _async_purifier_manual(
+        self, step_id: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
         user_input = _form_input(user_input, CONF_DEVICE_ID)
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -313,7 +324,7 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 errors["base"] = result.error
         return self.async_show_form(
-            step_id="purifier_manual",
+            step_id=step_id,
             data_schema=self.add_suggested_values_to_schema(MANUAL_SCHEMA, user_input),
             errors=errors,
         )

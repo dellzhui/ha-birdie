@@ -124,7 +124,7 @@ async def test_pick_manual_entry(
 
 async def test_manual_entry(hass: HomeAssistant, fake_lan: FakeLan) -> None:
     result = await _start(hass)
-    assert result["step_id"] == "purifier_manual"
+    assert result["step_id"] == "purifier_not_found"
 
     fake_lan.connect_error = DeviceUnreachableError("no route")
     result = await hass.config_entries.flow.async_configure(result["flow_id"], _manual())
@@ -163,7 +163,7 @@ async def test_manual_without_ip_searches_network(
     hass: HomeAssistant, fake_lan: FakeLan, lan_broadcasts: dict[str, DiscoveredDevice]
 ) -> None:
     result = await _start(hass)
-    assert result["step_id"] == "purifier_manual"
+    assert result["step_id"] == "purifier_not_found"
 
     values = _manual()
     del values[CONF_HOST]
@@ -184,7 +184,7 @@ async def test_already_configured(
     mock_purifier_entry().add_to_hass(hass)
     lan_broadcasts[DEVICE_ID] = discovered()
     result = await _start(hass)
-    assert result["step_id"] == "purifier_manual"  # configured device not offered
+    assert result["step_id"] == "purifier_not_found"  # configured device not offered
     result = await hass.config_entries.flow.async_configure(result["flow_id"], _manual())
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"

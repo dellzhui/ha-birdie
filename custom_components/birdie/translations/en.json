@@ -82,6 +82,29 @@
           "host": "Optional. Needed when Home Assistant cannot find the Podium on its own. Find it in your router's list of connected devices; the name shown there may not mention Birdie."
         }
       },
+      "purifier_not_found": {
+        "title": "Add Birdie Podium",
+        "description": "Home Assistant did not find a new Podium on your network. Some routers block the search, even when everything is on the same network.\n\nLong-press the device ID and the local key in the Birdie app to copy them, and paste them here. Leave the IP address empty at first: Home Assistant then searches once more for this device ID. If it is still not found, enter the IP address, which you find in your router's list of connected devices (in its web page or app).",
+        "data": {
+          "device_id": "Device ID",
+          "local_key": "Local key",
+          "host": "IP address"
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "Only change the protocol version if automatic detection fails.",
+            "data": {
+              "protocol_version": "Protocol version"
+            }
+          }
+        },
+        "data_description": {
+          "device_id": "Shown in the Birdie app next to the local key.",
+          "local_key": "16 characters, exactly as shown in the Birdie app. It changes whenever the Podium is added again in the app.",
+          "host": "Optional. Needed when Home Assistant cannot find the Podium on its own. Find it in your router's list of connected devices; the name shown there may not mention Birdie."
+        }
+      },
       "reauth_confirm": {
         "title": "Reconnect your Podium",
         "description": "{name} no longer accepts its local key. This happens when the Podium is added again in the Birdie app, which gives it a new key.\n\nIn the Birdie app, long-press the local key of this Podium (device ID `{device_id}`) to copy it, and paste it below.",
