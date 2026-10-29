@@ -12,8 +12,8 @@
       "invalid_device_id": "Enter the device ID exactly as shown in the Birdie app. Long-press it in the app to copy it.",
       "invalid_local_key_format": "A local key has exactly 16 characters. Long-press the local key in the Birdie app to copy it, then paste it here.",
       "invalid_host": "Enter the IP address of the air purifier, for example 192.168.1.23.",
-      "device_not_found": "The air purifier was not found on your network. Make sure it is switched on and connected to the same network as Home Assistant, or enter its IP address.",
-      "cannot_connect": "Cannot reach the air purifier. Make sure it is switched on, connected to Wi-Fi and on a network Home Assistant can reach, then try again.",
+      "device_not_found": "Home Assistant could not find this Podium on your network. Some routers block the search even on the same network. Enter the Podium's IP address: you find it in your router's list of connected devices (in its web page or app).",
+      "cannot_connect": "Cannot reach the air purifier. Make sure it is switched on and connected to Wi-Fi, and that the IP address is right (see your router's list of connected devices), then try again.",
       "invalid_local_key": "The air purifier did not accept this local key. The key changes every time the purifier is added again in the Birdie app, so copy the current one. Close other apps that control the purifier on your local network (such as Homey) and try again.",
       "unknown": "Unexpected error. See the Home Assistant log for details."
     },
@@ -61,7 +61,7 @@
       },
       "purifier_manual": {
         "title": "Add Birdie Podium",
-        "description": "Long-press the device ID and the local key in the Birdie app to copy them, and paste them here. Leave the IP address empty and Home Assistant will search your network for the Podium.",
+        "description": "Long-press the device ID and the local key in the Birdie app to copy them, and paste them here.\n\nLeave the IP address empty and Home Assistant searches your network for this Podium. Some routers block that search even when everything is on the same network: if the Podium is not found, enter its IP address, which you find in your router's list of connected devices (in its web page or app).",
         "data": {
           "device_id": "Device ID",
           "local_key": "Local key",
@@ -79,7 +79,7 @@
         "data_description": {
           "device_id": "Shown in the Birdie app next to the local key.",
           "local_key": "16 characters, exactly as shown in the Birdie app. It changes whenever the Podium is added again in the app.",
-          "host": "Only needed if the Podium is on a different network than Home Assistant."
+          "host": "Optional. Needed when Home Assistant cannot find the Podium on its own. Find it in your router's list of connected devices; the name shown there may not mention Birdie."
         }
       },
       "reauth_confirm": {
@@ -110,7 +110,7 @@
         },
         "data_description": {
           "local_key": "Only needed if the Podium was added again in the Birdie app. Long-press the new key in the app to copy it.",
-          "host": "Home Assistant follows IP address changes on its own; change this only if the Podium is on a different network."
+          "host": "Home Assistant follows IP address changes when it can find the Podium on your network. If you had to enter the address yourself, update it here when it changes, or give the Podium a fixed address in your router."
         }
       }
     }
