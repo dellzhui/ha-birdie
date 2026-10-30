@@ -9,7 +9,7 @@ Wi-Fi air purifier, controlled directly over the local network.
 
 ## Status
 
-Current release: `v0.2.0b2`. It adds the Birdie Podium air purifier, still in
+Current release: `v0.2.0b3`. It adds the Birdie Podium air purifier, still in
 beta (see [docs/remote-testing.md](docs/remote-testing.md)); Birdie Pro setups
 carry on unchanged.
 

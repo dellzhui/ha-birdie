@@ -53,9 +53,9 @@ Send `read.json` and `test.json` to the developers.
 
 Preferably use a purifier with a working PM2.5 sensor.
 
-1. Install `v0.2.0b2` or later: with HACS, it shows up under
+1. Install `v0.2.0b3` or later: with HACS, it shows up under
    **Settings > Updates** like any other update; install it and restart
-   Home Assistant. Without HACS, unzip `birdie-0.2.0b2.zip` from the release
+   Home Assistant. Without HACS, unzip `birdie-0.2.0b3.zip` from the release
    into the Home Assistant `config` folder (the zip contains
    `custom_components/birdie`) and restart Home Assistant. A Birdie Pro that is
    already set up keeps working; nothing has to be changed for it.
