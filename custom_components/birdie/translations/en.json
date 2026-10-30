@@ -145,6 +145,9 @@
       },
       "filter_cover": {
         "name": "Filter cover"
+      },
+      "co2_alarm": {
+        "name": "CO2 alarm"
       }
     },
     "button": {
@@ -162,6 +165,14 @@
             }
           }
         }
+      }
+    },
+    "number": {
+      "co2_threshold": {
+        "name": "CO2 threshold"
+      },
+      "cool_down_period": {
+        "name": "Cool down period"
       }
     },
     "sensor": {
@@ -187,6 +198,15 @@
           "fan": "Fan fault",
           "pm25_sensor": "PM2.5 sensor fault",
           "overcurrent": "Overcurrent protection"
+        }
+      },
+      "state": {
+        "name": "State",
+        "state": {
+          "up": "Up",
+          "down": "Down",
+          "cooldown": "Cooldown",
+          "unknown": "Unknown"
         }
       }
     }

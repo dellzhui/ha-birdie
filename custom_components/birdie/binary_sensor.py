@@ -18,7 +18,7 @@ from .entity import BirdieEntity
 BINARY_SENSORS: tuple[BinarySensorEntityDescription, ...] = (
     BinarySensorEntityDescription(
         key="co2_alarm",
-        name="CO2 alarm",
+        translation_key="co2_alarm",
         device_class=BinarySensorDeviceClass.PROBLEM,
     ),
 )
