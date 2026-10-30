@@ -9,9 +9,9 @@ Wi-Fi air purifier, controlled directly over the local network.
 
 ## Status
 
-Current release: `v0.1.3`. Beta with the Birdie Podium air purifier:
-`v0.2.0b2` (HACS pre-release, see
-[docs/remote-testing.md](docs/remote-testing.md)).
+Current release: `v0.2.0b2`. It adds the Birdie Podium air purifier, still in
+beta (see [docs/remote-testing.md](docs/remote-testing.md)); Birdie Pro setups
+carry on unchanged.
 
 The integration is available for installation through HACS as a custom
 repository. Submission to the HACS default repository is in progress; until it is
