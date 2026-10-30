@@ -36,7 +36,6 @@ class BirdieSensorEntityDescription(SensorEntityDescription):
 SENSORS: tuple[BirdieSensorEntityDescription, ...] = (
     BirdieSensorEntityDescription(
         key="co2",
-        name="CO2",
         device_class=SensorDeviceClass.CO2,
         native_unit_of_measurement=PARTS_PER_MILLION,
         state_class=SensorStateClass.MEASUREMENT,
@@ -45,7 +44,6 @@ SENSORS: tuple[BirdieSensorEntityDescription, ...] = (
     ),
     BirdieSensorEntityDescription(
         key="temperature",
-        name="Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -54,7 +52,6 @@ SENSORS: tuple[BirdieSensorEntityDescription, ...] = (
     ),
     BirdieSensorEntityDescription(
         key="humidity",
-        name="Humidity",
         device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -70,7 +67,6 @@ SENSORS: tuple[BirdieSensorEntityDescription, ...] = (
     ),
     BirdieSensorEntityDescription(
         key="battery",
-        name="Battery",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
