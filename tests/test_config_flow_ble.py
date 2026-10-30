@@ -21,7 +21,7 @@ from custom_components.birdie.const import (
     ENVIRONMENTAL_SERVICE_UUID,
 )
 
-ADDRESS = "4C:5B:B3:43:A8:19"
+ADDRESS = "AA:BB:CC:11:22:33"
 
 
 def _birdie_pro_service_info() -> BluetoothServiceInfoBleak:

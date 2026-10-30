@@ -270,7 +270,7 @@ async def test_reconfigure(hass: HomeAssistant, fake_lan: FakeLan) -> None:
 
 
 async def test_reconfigure_bluetooth_entry_is_refused(hass: HomeAssistant) -> None:
-    entry = mock_purifier_entry(data={"address": "4C:5B:B3:43:A8:19"}, unique_id="4C:5B")
+    entry = mock_purifier_entry(data={"address": "AA:BB:CC:11:22:33"}, unique_id="AA:BB")
     entry.add_to_hass(hass)
     with patch("custom_components.birdie.async_setup_entry", return_value=True):
         result = await entry.start_reconfigure_flow(hass)

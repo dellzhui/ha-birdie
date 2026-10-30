@@ -23,7 +23,7 @@ User ── enters them once ──> Home Assistant ──┘ + UDP 6666/6667 an
 The purifier keeps talking to the Tuya cloud for the Birdie app as before;
 Home Assistant does not depend on that.
 
-Birdie (Tobias) validated this route on Homey with an existing Tuya Local
+Birdie validated this route on Homey with an existing Tuya Local
 app (power on/off). The probe tool then confirmed on a real purifier that
 status, pushes, power and every mode work over the LAN (see Data points).
 

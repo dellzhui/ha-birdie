@@ -173,14 +173,14 @@ Connect to a known BLE address, dump GATT services, and read known
 characteristics:
 
 ```bash
-python tools/birdie_probe.py --address 4C:5B:B3:43:A8:19
+python tools/birdie_probe.py --address AA:BB:CC:11:22:33
 ```
 
 Connect and subscribe to notifications for CO2, temperature, humidity, state,
 and battery:
 
 ```bash
-python tools/birdie_probe.py --address 4C:5B:B3:43:A8:19 --notify
+python tools/birdie_probe.py --address AA:BB:CC:11:22:33 --notify
 ```
 
 The example address is for probe usage only. The Home Assistant integration uses

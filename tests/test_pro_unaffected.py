@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.birdie.const import CONF_NAME, DOMAIN
 from custom_components.birdie.purifier import discovery
 
-ADDRESS = "4C:5B:B3:43:A8:19"
+ADDRESS = "AA:BB:CC:11:22:33"
 # What 0.1.x stored for a Birdie Pro; upgrades must keep working with it.
 PRO_ENTRY_DATA = {CONF_ADDRESS: ADDRESS, CONF_NAME: "Birdie Pro"}
 
