@@ -8,6 +8,7 @@ listener, or a short-lived one when none is running.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 from typing import Any
 
@@ -24,7 +25,14 @@ from ..const import (
     DOMAIN,
     is_purifier_entry_data,
 )
-from ..tuya_lan import DiscoveredDevice, DiscoveryListener, async_discover
+from ..lan import (
+    DiscoveredDevice,
+    DiscoveryListener,
+    FoundDevice,
+    addresses_to_search,
+    async_discover,
+    async_find_device,
+)
 from .coordinator import BirdiePurifierCoordinator
 from .model import PRODUCT_KEYS
 
@@ -132,3 +140,28 @@ async def async_scan(
         return await async_discover(seconds, device_id=device_id, listener=listener)
     finally:
         await listener.async_stop()
+
+
+async def async_local_ipv4_interfaces(hass: HomeAssistant) -> list[ipaddress.IPv4Interface]:
+    """IPv4 addresses of the network adapters Home Assistant is set to use."""
+    interfaces: list[ipaddress.IPv4Interface] = []
+    for adapter in await network.async_get_adapters(hass):
+        if not adapter["enabled"]:
+            continue
+        for ipv4 in adapter["ipv4"]:
+            interfaces.append(
+                ipaddress.IPv4Interface(f"{ipv4['address']}/{ipv4['network_prefix']}")
+            )
+    return interfaces
+
+
+async def async_search_network(
+    hass: HomeAssistant, device_id: str, local_key: str, protocol_version: str
+) -> FoundDevice | None:
+    """Look for a purifier that does not announce itself, by its key."""
+    addresses = addresses_to_search(await async_local_ipv4_interfaces(hass))
+    if not addresses:
+        return None
+    return await async_find_device(
+        device_id, local_key, addresses, protocol_version=protocol_version
+    )

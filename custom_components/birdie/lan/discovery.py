@@ -1,12 +1,12 @@
-"""Find Tuya devices on the local network from their UDP broadcasts.
+"""Find devices on the local network from their UDP broadcasts.
 
-Tuya Wi-Fi devices announce themselves every few seconds: protocol 3.1 in
-plain text on UDP port 6666, 3.3 and later encrypted with a well-known key on
-port 6667. Some 3.5 devices only answer a request broadcast to port 7000;
-every Tuya device on the network answers such a request, so it is sent only
+Devices that speak this local protocol announce themselves every few seconds:
+protocol 3.1 in plain text on UDP port 6666, 3.3 and later encrypted with a
+well-known key on port 6667. Some 3.5 devices only answer a request broadcast
+to port 7000; every such device on the network answers it, so it is sent only
 while actively searching (``async_discover``), never by a listener on its own.
-Decryption is tinytuya's. Sockets are opened with SO_REUSEADDR/SO_REUSEPORT so
-other Tuya integrations can listen on the same ports.
+Decryption is the protocol library's. Sockets are opened with
+SO_REUSEADDR/SO_REUSEPORT so other integrations can listen on the same ports.
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ class DiscoveryListener:
             try:
                 sock = _udp_socket(self._bind_host, port)
             except OSError as err:
-                _LOGGER.warning("Cannot listen for Tuya broadcasts on UDP %s: %s", port, err)
+                _LOGGER.warning("Cannot listen for device broadcasts on UDP %s: %s", port, err)
                 continue
             transport, _ = await loop.create_datagram_endpoint(lambda: _Protocol(self), sock=sock)
             self._transports.append(transport)

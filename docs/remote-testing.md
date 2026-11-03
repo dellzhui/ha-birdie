@@ -19,7 +19,7 @@ testing therefore runs on a machine in Birdie's office network.
 4. Someone near the purifier to watch it react and to change settings in the
    app while the probe watches.
 
-Close Homey's Tuya Local app (or any other local Tuya client) during the test:
+Close the purifier's app on Homey (or any other local controller) during the test:
 the purifier accepts only a few local connections.
 
 ## Step 1: Probe (no Home Assistant needed)
@@ -30,9 +30,9 @@ steps for macOS, Linux and Windows). From a clone of this repository instead:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install tinytuya==1.20.0
+pip install "$(python -c 'import json; print(json.load(open("custom_components/birdie/manifest.json"))["requirements"][0])')"
 
-# Which Tuya devices announce themselves? (the purifier should be listed
+# Which devices announce themselves? (the purifier should be listed
 # as "Birdie purifier"; note the IP and protocol version)
 python -m tools.purifier_probe discover
 
@@ -53,13 +53,13 @@ Send `read.json` and `test.json` to the developers.
 
 Preferably use a purifier with a working PM2.5 sensor.
 
-1. Install `v0.2.0b3` or later: with HACS, it shows up under
+1. Install `v0.2.0b4` or later: with HACS, it shows up under
    **Settings > Updates** like any other update; install it and restart
-   Home Assistant. Without HACS, unzip `birdie-0.2.0b3.zip` from the release
+   Home Assistant. Without HACS, unzip `birdie-0.2.0b4.zip` from the release
    into the Home Assistant `config` folder (the zip contains
    `custom_components/birdie`) and restart Home Assistant. A Birdie Pro that is
    already set up keeps working; nothing has to be changed for it.
-2. Close other local controllers of the purifier (Homey Tuya Local, the
+2. Close other local controllers of the purifier (an app on Homey, the
    probe tool).
 3. **Add integration > Birdie > Podium air purifier (Wi-Fi, local network)**. Home
    Assistant OS and host-network Docker installs should list the purifier

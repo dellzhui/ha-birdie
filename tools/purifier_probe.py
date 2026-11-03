@@ -2,7 +2,7 @@
 
 Commands:
 
-  discover   List Tuya devices announcing themselves on the network.
+  discover   List devices announcing themselves on the network.
   read       Connect, print the raw DPs and the decoded state, watch pushed
              changes for a while.
   test       Like read, then send a fixed sequence of commands and record
@@ -35,20 +35,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from custom_components.birdie.lan import (
+    PROTOCOL_AUTO,
+    PROTOCOL_VERSIONS,
+    DeviceConfig,
+    LanDevice,
+    LanError,
+    async_discover,
+)
 from custom_components.birdie.purifier.model import (
     DP_MODE,
     DP_SWITCH,
     PRODUCT_KEYS,
     PurifierState,
     reset_filter_dps,
-)
-from custom_components.birdie.tuya_lan import (
-    PROTOCOL_AUTO,
-    PROTOCOL_VERSIONS,
-    DeviceConfig,
-    TuyaLanDevice,
-    TuyaLanError,
-    async_discover,
 )
 
 KEY_ENV = "BIRDIE_LOCAL_KEY"
@@ -92,7 +92,7 @@ class Recorder:
             self.events.append({"at": _now(), "type": "dps", "changed": changed})
             print(f"{_now()}  dps changed: {json.dumps(changed)}")
 
-    def availability(self, available: bool, error: TuyaLanError | None) -> None:
+    def availability(self, available: bool, error: LanError | None) -> None:
         self.events.append(
             {"at": _now(), "type": "availability", "available": available, "error": repr(error)}
         )
@@ -103,7 +103,7 @@ async def _discover(args: argparse.Namespace) -> int:
     print(f"Listening for {args.seconds:.0f} s on UDP 6666/6667 ...")
     found = await async_discover(args.seconds)
     if not found:
-        print("No Tuya devices announced themselves. Is this host on the same network?")
+        print("No devices announced themselves. Is this host on the same network?")
         return 1
     for device in found.values():
         birdie = "Birdie purifier" if device.product_key in PRODUCT_KEYS else ""
@@ -146,7 +146,7 @@ async def _probe(args: argparse.Namespace) -> int:
         return 1
     report["host"] = host if args.keep_ip else "<redacted>"
     recorder = Recorder()
-    device = TuyaLanDevice(
+    device = LanDevice(
         DeviceConfig(args.device_id, host, _local_key(), args.protocol, args.port),
         on_status=recorder.status,
         on_availability=recorder.availability,
@@ -155,7 +155,7 @@ async def _probe(args: argparse.Namespace) -> int:
         try:
             started = time.monotonic()
             dps = await device.async_connect()
-        except TuyaLanError as err:
+        except LanError as err:
             print(f"Connection failed: {err!r}")
             report["connect_error"] = repr(err)
             return 2
@@ -186,7 +186,7 @@ async def _probe(args: argparse.Namespace) -> int:
 
 
 async def _run_commands(
-    device: TuyaLanDevice, args: argparse.Namespace, initial: dict[str, Any]
+    device: LanDevice, args: argparse.Namespace, initial: dict[str, Any]
 ) -> list[dict[str, Any]]:
     sequence = list(COMMAND_SEQUENCE)
     if args.include_filter_reset:
@@ -203,7 +203,7 @@ async def _run_commands(
         entry: dict[str, Any] = {"label": label, "sent": dps, "sent_at": sent_at}
         try:
             await device.async_set_dps(dps)
-        except TuyaLanError as err:
+        except LanError as err:
             entry["error"] = repr(err)
             results.append(entry)
             print(f"  failed: {err!r}")
@@ -234,7 +234,7 @@ def main() -> int:
         probe.add_argument("--watch", type=float, default=30, help="seconds to watch pushes")
         probe.add_argument("--report", help="write a JSON report to this file")
         probe.add_argument("--keep-ip", action="store_true", help="keep the IP in the report")
-        probe.add_argument("--debug", action="store_true", help="tinytuya debug log (key redacted)")
+        probe.add_argument("--debug", action="store_true", help="library debug log (key redacted)")
         if name == "test":
             probe.add_argument("--pause", type=float, default=4, help="seconds after each command")
             probe.add_argument("--include-filter-reset", action="store_true")

@@ -8,10 +8,10 @@ import socket
 
 import pytest
 
-from custom_components.birdie.tuya_lan import DiscoveryListener, async_discover
-from custom_components.birdie.tuya_lan.discovery import _request_payload, parse_broadcast
+from custom_components.birdie.lan import DiscoveryListener, async_discover
+from custom_components.birdie.lan.discovery import _request_payload, parse_broadcast
 
-from .fake_device import FakeTuyaDevice
+from .fake_device import FakeLanDevice
 
 DEVICE_ID = "bf3a9c71d2e04b58f6qz1x"
 KEY = "0123456789abcdef"
@@ -19,7 +19,7 @@ KEY = "0123456789abcdef"
 
 @pytest.mark.parametrize("version", ["3.1", "3.3", "3.4", "3.5"])
 def test_parse_broadcast(version: str) -> None:
-    packet = FakeTuyaDevice(DEVICE_ID, KEY, version).broadcast_packet("192.168.1.40")
+    packet = FakeLanDevice(DEVICE_ID, KEY, version).broadcast_packet("192.168.1.40")
     device = parse_broadcast(packet, "192.168.1.40")
     assert device is not None
     assert device.device_id == DEVICE_ID
@@ -50,9 +50,9 @@ async def test_listener_reports_devices() -> None:
     await listener.async_start()
     try:
         first, second = listener.bound_ports
-        _send(first, FakeTuyaDevice(DEVICE_ID, KEY, "3.1").broadcast_packet("10.0.0.5"))
-        _send(second, b"not a tuya packet")
-        _send(second, FakeTuyaDevice("bfother00000000000000", KEY, "3.3").broadcast_packet())
+        _send(first, FakeLanDevice(DEVICE_ID, KEY, "3.1").broadcast_packet("10.0.0.5"))
+        _send(second, b"not a device packet")
+        _send(second, FakeLanDevice("bfother00000000000000", KEY, "3.3").broadcast_packet())
         async with asyncio.timeout(2):
             while len(listener.devices) < 2:
                 await asyncio.sleep(0.01)
@@ -72,7 +72,7 @@ async def test_discover_returns_when_device_is_seen() -> None:
         (port,) = listener.bound_ports
         loop = asyncio.get_running_loop()
         loop.call_later(
-            0.05, _send, port, FakeTuyaDevice(DEVICE_ID, KEY, "3.5").broadcast_packet("10.0.0.7")
+            0.05, _send, port, FakeLanDevice(DEVICE_ID, KEY, "3.5").broadcast_packet("10.0.0.7")
         )
         async with asyncio.timeout(1):
             found = await async_discover(30, device_id=DEVICE_ID, listener=listener)
@@ -117,7 +117,7 @@ async def _requests_received(search: bool, *, request: bool = True) -> list[byte
 
 @pytest.mark.usefixtures("socket_enabled")
 async def test_listener_alone_sends_no_requests() -> None:
-    """Every Tuya device answers a request; a background listener only listens."""
+    """Every device answers a request; a background listener only listens."""
     assert await _requests_received(search=False) == []
 
 

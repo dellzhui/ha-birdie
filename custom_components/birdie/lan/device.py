@@ -1,7 +1,7 @@
-"""Asynchronous client for one Tuya Wi-Fi device on the local network.
+"""Asynchronous client for one Wi-Fi device on the local network.
 
-tinytuya's ``Device`` does blocking socket I/O. Each ``TuyaLanDevice`` owns a
-single worker thread that performs every tinytuya call, so calls are
+The protocol library's ``Device`` does blocking socket I/O. Each ``LanDevice``
+owns a single worker thread that performs every library call, so calls are
 serialised without locks and never block the event loop. A background loop
 keeps a persistent connection open, sends heartbeats, receives the status
 reports the device pushes, polls the full status now and then, and
@@ -25,7 +25,7 @@ from typing import Any
 
 import tinytuya
 
-from .errors import DeviceUnreachableError, InvalidLocalKeyError, TuyaLanError
+from .errors import DeviceUnreachableError, InvalidLocalKeyError, LanError
 from .redact import register_secret, unregister_secret
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,11 +34,11 @@ DEFAULT_PORT = 6668
 PROTOCOL_AUTO = "auto"
 PROTOCOL_VERSIONS: tuple[str, ...] = ("3.1", "3.2", "3.3", "3.4", "3.5")
 # Order tried when the version is unknown. 3.2 is only used when configured:
-# tinytuya probes 3.2 devices with many requests.
+# the library probes 3.2 devices with many requests.
 AUTO_PROTOCOL_ORDER: tuple[str, ...] = ("3.3", "3.5", "3.4", "3.1")
 LOCAL_KEY_LENGTH = 16
 
-# tinytuya error codes (tinytuya.core.error_helper).
+# Error codes of the protocol library (core.error_helper).
 _ERR_CONNECT = "901"
 _ERR_OFFLINE = "905"
 _ERR_TIMEOUT = "902"
@@ -53,8 +53,8 @@ _CONNECTION_LOST_ERRORS = frozenset(
 )
 
 StatusCallback = Callable[[dict[str, Any]], None]
-AvailabilityCallback = Callable[[bool, TuyaLanError | None], None]
-ErrorCallback = Callable[[TuyaLanError], None]
+AvailabilityCallback = Callable[[bool, LanError | None], None]
+ErrorCallback = Callable[[LanError], None]
 
 
 @dataclass(frozen=True)
@@ -111,7 +111,7 @@ def _dps_of(result: Any) -> dict[str, Any] | None:
     return None
 
 
-def _open_error(code: str | None, version: str) -> TuyaLanError:
+def _open_error(code: str | None, version: str) -> LanError:
     if code in _UNREACHABLE_ERRORS:
         return DeviceUnreachableError("Cannot connect to the device")
     if code in _KEY_ERRORS:
@@ -119,7 +119,7 @@ def _open_error(code: str | None, version: str) -> TuyaLanError:
     return DeviceUnreachableError(f"No valid answer from the device (protocol {version})")
 
 
-class TuyaLanDevice:
+class LanDevice:
     """One device: connect, read status, send DPs, stay connected."""
 
     def __init__(
@@ -138,7 +138,7 @@ class TuyaLanDevice:
         self._on_error = on_error
         self._t = timings or Timings()
         self._version_hint = version_hint
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="birdie_tuya_lan")
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="birdie_lan")
         self._api: tinytuya.Device | None = None
         self._version: str | None = None
         self._dps: dict[str, Any] = {}
@@ -150,13 +150,13 @@ class TuyaLanDevice:
         self._last_status = 0.0
         self._refresh_at: float | None = None
         self._available = False
-        # The tinytuya object being connected in _w_open, so close() can abort it.
+        # The library object being connected in _w_open, so close() can abort it.
         self._opening: tinytuya.Device | None = None
-        self.last_error: TuyaLanError | None = None
+        self.last_error: LanError | None = None
         register_secret(config.local_key)
 
     def __repr__(self) -> str:
-        return f"TuyaLanDevice({self._config!r})"
+        return f"LanDevice({self._config!r})"
 
     # ---------------------------------------------------------- properties
 
@@ -181,7 +181,7 @@ class TuyaLanDevice:
     # ----------------------------------------------------------- public API
 
     async def async_connect(self) -> dict[str, Any]:
-        """Connect and read the full status; raise ``TuyaLanError`` on failure."""
+        """Connect and read the full status; raise ``LanError`` on failure."""
         version, dps = await self._call(self._w_open)
         self._handle_connected(version, dps)
         return dict(self._dps)
@@ -190,7 +190,7 @@ class TuyaLanDevice:
         """Start the background loop that keeps the device connected."""
         if self._task is None and not self._closed:
             self._task = asyncio.get_running_loop().create_task(
-                self._run(), name=f"birdie_tuya_lan_{self._config.device_id[-6:]}"
+                self._run(), name=f"birdie_lan_{self._config.device_id[-6:]}"
             )
 
     async def async_close(self) -> None:
@@ -273,7 +273,7 @@ class TuyaLanDevice:
             if self._api is None:
                 try:
                     version, dps = await self._call(self._w_open)
-                except TuyaLanError as err:
+                except LanError as err:
                     self.last_error = err
                     self._set_available(False, err)
                     if self._on_error is not None:
@@ -317,7 +317,7 @@ class TuyaLanDevice:
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(self._wake.wait(), seconds)
 
-    async def _async_lost(self, err: TuyaLanError) -> None:
+    async def _async_lost(self, err: LanError) -> None:
         _LOGGER.debug("Connection to device %s lost: %s", self._config.device_id, err)
         self.last_error = err
         await self._call(self._w_drop)
@@ -345,7 +345,7 @@ class TuyaLanDevice:
         if (changed or new_keys or full) and self._on_status is not None:
             self._on_status(dict(self._dps))
 
-    def _set_available(self, available: bool, error: TuyaLanError | None) -> None:
+    def _set_available(self, available: bool, error: LanError | None) -> None:
         if available == self._available:
             return
         self._available = available
@@ -384,7 +384,7 @@ class TuyaLanDevice:
             connection_retry_delay=0,
             port=config.port,
         )
-        # Only 3.2 devices need tinytuya's "device22" variant; letting it
+        # Only 3.2 devices need the library's "device22" variant; letting it
         # auto-switch can leave other devices unresponsive.
         api.disabledetect = version != "3.2"
         return api
@@ -403,7 +403,7 @@ class TuyaLanDevice:
 
     def _w_open(self) -> tuple[str, dict[str, Any]]:
         self._w_drop()
-        errors: list[TuyaLanError] = []
+        errors: list[LanError] = []
         for version in self._versions_to_try():
             if self._closed:
                 raise DeviceUnreachableError("The device connection is closed")

@@ -1,6 +1,6 @@
 """Run a simulated Birdie air purifier on this machine (for demos and local testing).
 
-Listens on TCP 6668 like a Tuya Wi-Fi device, announces itself on UDP 6667
+Listens on TCP 6668 like the real purifier, announces itself on UDP 6667
 every few seconds, drifts its PM2.5 value and counts filter minutes. The DPs
 mirror what a real purifier reported (protocol 3.4, no DP 108); the values
 are synthetic. --pm25-fault behaves like the real unit with a broken PM2.5
@@ -18,7 +18,7 @@ import random
 import socket
 import time
 
-from tests.tuya_lan.fake_device import FakeTuyaDevice
+from tests.lan.fake_device import FakeLanDevice
 
 DEMO_KEY = "demo0local0key00"
 DEMO_DPS = {
@@ -45,6 +45,11 @@ async def main() -> None:
     parser.add_argument("--broadcast", default="255.255.255.255")
     parser.add_argument("--pm25-fault", action="store_true", help="broken PM2.5 sensor")
     parser.add_argument(
+        "--silent",
+        action="store_true",
+        help="never announce itself (like a purifier behind a router that drops broadcasts)",
+    )
+    parser.add_argument(
         "--filter-minute", type=float, default=60, help="seconds per filter minute counted"
     )
     args = parser.parse_args()
@@ -53,7 +58,7 @@ async def main() -> None:
     dps = dict(DEMO_DPS)
     if args.pm25_fault:
         dps.update({"2": 1, "111": "pm25"})
-    device = FakeTuyaDevice(args.device_id, key, args.version, dps, host=args.bind)
+    device = FakeLanDevice(args.device_id, key, args.version, dps, host=args.bind)
     await device.start(args.port)
     announce_ip = args.announce_ip or _own_ip()
     print(f"Simulated purifier {args.device_id} v{args.version} on {announce_ip}:{device.port}")
@@ -63,9 +68,10 @@ async def main() -> None:
     next_minute = time.monotonic() + args.filter_minute
     try:
         while True:
-            sock.sendto(device.broadcast_packet(announce_ip), (args.broadcast, 6667))
+            if not args.silent:
+                sock.sendto(device.broadcast_packet(announce_ip), (args.broadcast, 6667))
             if not args.pm25_fault:
-                pm25 = max(0, int(device.dps["2"]) + random.randint(-3, 3))
+                pm25 = min(150, max(0, int(device.dps["2"]) + random.randint(-3, 3)))
                 await device.push({"2": pm25})
             if time.monotonic() >= next_minute:
                 next_minute += args.filter_minute

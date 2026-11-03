@@ -1,7 +1,7 @@
 """Coordinator for one Birdie air purifier on the local network.
 
 The device pushes its status over a persistent LAN connection, so this
-coordinator does not poll: the Tuya LAN client calls back on every change
+coordinator does not poll: the LAN client calls back on every change
 and on connection loss, and reconnects on its own.
 """
 
@@ -27,13 +27,13 @@ from ..const import (
     PURIFIER_DISCOVERY_SECONDS,
     PURIFIER_KEY_FAILURES_BEFORE_REAUTH,
 )
-from ..tuya_lan import (
+from ..lan import (
     PROTOCOL_AUTO,
     DeviceConfig,
     DeviceUnreachableError,
     InvalidLocalKeyError,
-    TuyaLanDevice,
-    TuyaLanError,
+    LanDevice,
+    LanError,
 )
 from .model import PurifierState, apply_dps
 
@@ -71,7 +71,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
             always_update=False,
         )
         self.device_id: str = entry.data[CONF_DEVICE_ID]
-        self.device = TuyaLanDevice(
+        self.device = LanDevice(
             device_config(entry.data),
             on_status=self._async_on_status,
             on_availability=self._async_on_availability,
@@ -107,7 +107,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
             raise UpdateFailed(
                 translation_domain=DOMAIN, translation_key="invalid_local_key"
             ) from err
-        except TuyaLanError as err:
+        except LanError as err:
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="device_unreachable",
@@ -131,7 +131,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
         """Read the full status (first refresh and manual entity updates)."""
         try:
             dps = await self.device.async_refresh()
-        except TuyaLanError as err:
+        except LanError as err:
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="device_unreachable",
@@ -153,7 +153,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
         """Write DPs and show the expected result until the device confirms it."""
         try:
             await self.device.async_set_dps(dps)
-        except TuyaLanError as err:
+        except LanError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="device_unreachable",
@@ -179,7 +179,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
         self.async_set_updated_data(PurifierState.from_dps(dps))
 
     @callback
-    def _async_on_availability(self, available: bool, error: TuyaLanError | None) -> None:
+    def _async_on_availability(self, available: bool, error: LanError | None) -> None:
         if available:
             self._key_failures = 0
             self._async_store_detected_version()
@@ -202,7 +202,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
         self.async_set_update_error(failure)
 
     @callback
-    def _async_on_error(self, error: TuyaLanError) -> None:
+    def _async_on_error(self, error: LanError) -> None:
         if not isinstance(error, InvalidLocalKeyError):
             self._key_failures = 0
             return

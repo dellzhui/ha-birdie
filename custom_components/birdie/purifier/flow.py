@@ -20,15 +20,15 @@ from homeassistant.helpers.selector import (
 )
 
 from ..const import CONF_DEVICE_ID, CONF_LOCAL_KEY, CONF_PROTOCOL_VERSION
-from ..tuya_lan import (
+from ..lan import (
     PROTOCOL_AUTO,
     PROTOCOL_VERSIONS,
     DeviceConfig,
     DeviceUnreachableError,
     InvalidLocalKeyError,
-    TuyaLanDevice,
+    LanDevice,
 )
-from ..tuya_lan.device import LOCAL_KEY_LENGTH
+from ..lan.device import LOCAL_KEY_LENGTH
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ RECONFIGURE_SCHEMA = vol.Schema(
 
 
 def clean_local_key(value: str | None) -> str | None:
-    """The key as entered, or None if it cannot be a Tuya local key."""
+    """The key as entered, or None if it cannot be a local key."""
     key = (value or "").strip()
     return key if len(key) == LOCAL_KEY_LENGTH else None
 
@@ -91,7 +91,7 @@ async def async_check_connection(
     config: DeviceConfig, version_hint: str | None
 ) -> ConnectionResult:
     """Connect once and read the status; never raises."""
-    device = TuyaLanDevice(config, version_hint=version_hint)
+    device = LanDevice(config, version_hint=version_hint)
     try:
         dps = await device.async_connect()
     except InvalidLocalKeyError:

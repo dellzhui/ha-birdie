@@ -2,7 +2,7 @@
 
 The kit contains the probe, the parts of the integration it imports (the
 Home Assistant-free LAN client and the DP model) and instructions, so a tester
-on the purifier's network needs only Python and tinytuya.
+on the purifier's network needs only Python and the protocol library.
 
 Run from the repository root:
 
@@ -26,7 +26,7 @@ FILES = [
     INTEGRATION / "const.py",
     INTEGRATION / "purifier/__init__.py",
     INTEGRATION / "purifier/model.py",
-    *sorted(p.relative_to(ROOT) for p in (ROOT / INTEGRATION / "tuya_lan").glob("*.py")),
+    *sorted(p.relative_to(ROOT) for p in (ROOT / INTEGRATION / "lan").glob("*.py")),
 ]
 
 README = """\
@@ -40,8 +40,8 @@ computer connected to the same network (same Wi-Fi / subnet) as the purifier.
 You need: Python 3.11 or newer, the purifier set up in the Birdie app, and
 its device ID and local key.
 
-Close other local controllers of the purifier first (for example a Homey
-Tuya Local app): the purifier accepts only a few local connections.
+Close other local controllers of the purifier first (for example an app on
+a Homey): the purifier accepts only a few local connections.
 
 1. Install
 ----------

@@ -1,8 +1,8 @@
 """Config flow for the Birdie integration.
 
 Two kinds of entries: Birdie Bluetooth devices (Birdie Pro) and Birdie air
-purifiers, which are Tuya-based Wi-Fi devices controlled over the local
-network with their device id and local key.
+purifiers, Wi-Fi devices controlled over the local network with their
+device id and local key.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any
 
 import voluptuous as vol
@@ -21,6 +22,7 @@ from homeassistant.components.bluetooth import (
 )
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS, CONF_HOST
+from homeassistant.core import callback
 
 from .ble import is_birdie_advertisement, normalize_address
 from .const import (
@@ -37,7 +39,8 @@ from .const import (
     PURIFIER_DISCOVERY_SECONDS,
     is_purifier_entry_data,
 )
-from .purifier.discovery import async_scan, is_birdie_purifier
+from .lan import PROTOCOL_AUTO, DeviceConfig, DiscoveredDevice, FoundDevice
+from .purifier.discovery import async_scan, async_search_network, is_birdie_purifier
 from .purifier.flow import (
     KEY_SCHEMA,
     MANUAL_SCHEMA,
@@ -48,7 +51,6 @@ from .purifier.flow import (
     clean_local_key,
 )
 from .purifier.model import MODEL_NAME
-from .tuya_lan import PROTOCOL_AUTO, DeviceConfig, DiscoveredDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +77,19 @@ def _form_input(user_input: dict[str, Any] | None, required: str) -> dict[str, A
     return user_input
 
 
+@dataclass
+class _NetworkSearch:
+    """A manual entry without IP address that the listener did not find."""
+
+    step_id: str
+    device_id: str
+    local_key: str = field(repr=False)
+    protocol_version: str
+    user_input: dict[str, Any] = field(repr=False)
+    task: asyncio.Task[FoundDevice | None] | None = None
+    found: FoundDevice | None = None
+
+
 def _discovery_title(discovery_info: BluetoothServiceInfoBleak) -> str:
     """Return a friendly title for a discovered Birdie device."""
     return discovery_info.name or discovery_info.address
@@ -99,6 +114,13 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
         self._lan_task: asyncio.Task[dict[str, DiscoveredDevice]] | None = None
         self._lan_devices: dict[str, DiscoveredDevice] = {}
         self._purifier: DiscoveredDevice | None = None
+        self._search: _NetworkSearch | None = None
+
+    @callback
+    def async_remove(self) -> None:
+        """Stop a network search that is still running."""
+        if self._search is not None and self._search.task is not None:
+            self._search.task.cancel()
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -291,7 +313,13 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         user_input = _form_input(user_input, CONF_DEVICE_ID)
         errors: dict[str, str] = {}
-        if user_input is not None:
+        search, self._search = self._search, None
+        if search is not None:
+            # Back from a network search that did not find the purifier. Home
+            # Assistant passes the input that started the search on again.
+            user_input = search.user_input
+            errors[CONF_HOST] = "device_not_found"
+        elif user_input is not None:
             device_id = user_input[CONF_DEVICE_ID].strip()
             key = clean_local_key(user_input[CONF_LOCAL_KEY])
             host = (user_input.get(CONF_HOST) or "").strip()
@@ -311,9 +339,9 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
                     await async_scan(self.hass, PURIFIER_DISCOVERY_SECONDS, device_id=device_id)
                 ).get(device_id)
                 if found is None:
-                    errors[CONF_HOST] = "device_not_found"
-                else:
-                    host, hint, product_key = found.host, found.protocol_version, found.product_key
+                    self._search = _NetworkSearch(step_id, device_id, key, version, user_input)
+                    return await self.async_step_purifier_search()
+                host, hint, product_key = found.host, found.protocol_version, found.product_key
             if not errors:
                 assert key is not None
                 config = DeviceConfig(device_id, host, key, version)
@@ -327,6 +355,48 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id=step_id,
             data_schema=self.add_suggested_values_to_schema(MANUAL_SCHEMA, user_input),
             errors=errors,
+        )
+
+    async def async_step_purifier_search(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Look for the purifier at every address on the local network."""
+        search = self._search
+        assert search is not None
+        if search.task is None:
+            search.task = self.hass.async_create_task(
+                async_search_network(
+                    self.hass, search.device_id, search.local_key, search.protocol_version
+                )
+            )
+        if not search.task.done():
+            return self.async_show_progress(
+                step_id="purifier_search",
+                progress_action="network_search",
+                progress_task=search.task,
+            )
+        try:
+            search.found = search.task.result()
+        except Exception:
+            _LOGGER.exception("Searching the network for %s failed", search.device_id)
+        if search.found is None:
+            return self.async_show_progress_done(next_step_id=search.step_id)
+        return self.async_show_progress_done(next_step_id="purifier_search_found")
+
+    async def async_step_purifier_search_found(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The search found the purifier: add it."""
+        search, self._search = self._search, None
+        assert search is not None and search.found is not None
+        found = search.found
+        config = DeviceConfig(
+            search.device_id, found.host, search.local_key, search.protocol_version
+        )
+        return await self._async_create_purifier(
+            config,
+            ConnectionResult(version=found.protocol_version, dps=found.dps),
+            product_key=None,
         )
 
     async def _async_create_purifier(

@@ -1,8 +1,8 @@
-"""A simulated Tuya Wi-Fi device speaking the LAN protocol (3.1, 3.3, 3.4, 3.5).
+"""A simulated Wi-Fi device speaking the LAN protocol (3.1, 3.3, 3.4, 3.5).
 
 Implements the device side of the framing, encryption and 3.4/3.5 session key
-negotiation with tinytuya's primitives, so the client is exercised against
-real encrypted traffic. Behaviour follows tinytuya's client expectations and
+negotiation with the protocol library's primitives, so the client is exercised
+against real encrypted traffic. Behaviour follows the library's expectations and
 public protocol descriptions; it is a test double, not a reference device.
 """
 
@@ -36,7 +36,7 @@ class _Session:
 
 
 @dataclass
-class FakeTuyaDevice:
+class FakeLanDevice:
     device_id: str
     local_key: str
     version: str = "3.3"

@@ -1,4 +1,4 @@
-"""TuyaLanDevice against the simulated device (real tinytuya encryption, localhost)."""
+"""LanDevice against the simulated device (real protocol encryption, localhost)."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ from typing import Any
 
 import pytest
 
-from custom_components.birdie.tuya_lan import (
+from custom_components.birdie.lan import (
     DeviceConfig,
     DeviceUnreachableError,
     InvalidLocalKeyError,
+    LanDevice,
     Timings,
-    TuyaLanDevice,
 )
 
-from .fake_device import FakeTuyaDevice
+from .fake_device import FakeLanDevice
 
 pytestmark = pytest.mark.usefixtures("socket_enabled")
 
@@ -44,21 +44,21 @@ async def wait_for(condition: Callable[[], bool], seconds: float = 5.0) -> None:
 
 
 @pytest.fixture(params=["3.1", "3.3", "3.4", "3.5"])
-async def device(request: pytest.FixtureRequest) -> AsyncIterator[FakeTuyaDevice]:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, request.param, dict(INITIAL_DPS))
+async def device(request: pytest.FixtureRequest) -> AsyncIterator[FakeLanDevice]:
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, request.param, dict(INITIAL_DPS))
     await fake.start()
     yield fake
     await fake.stop()
 
 
 class Client:
-    """A TuyaLanDevice that records callbacks."""
+    """A LanDevice that records callbacks."""
 
-    def __init__(self, fake: FakeTuyaDevice, **config: Any) -> None:
+    def __init__(self, fake: FakeLanDevice, **config: Any) -> None:
         self.statuses: list[dict[str, Any]] = []
         self.availability: list[tuple[bool, Exception | None]] = []
         options: dict[str, Any] = {"local_key": LOCAL_KEY, "port": fake.port} | config
-        self.device = TuyaLanDevice(
+        self.device = LanDevice(
             DeviceConfig(DEVICE_ID, "127.0.0.1", **options),
             on_status=self.statuses.append,
             on_availability=lambda up, err: self.availability.append((up, err)),
@@ -70,7 +70,7 @@ class Client:
 async def make_client() -> AsyncIterator[Callable[..., Client]]:
     clients: list[Client] = []
 
-    def factory(fake: FakeTuyaDevice, **config: Any) -> Client:
+    def factory(fake: FakeLanDevice, **config: Any) -> Client:
         client = Client(fake, **config)
         clients.append(client)
         return client
@@ -81,7 +81,7 @@ async def make_client() -> AsyncIterator[Callable[..., Client]]:
 
 
 async def test_connect_detects_version_and_reads_status(
-    device: FakeTuyaDevice, make_client: Callable[..., Client]
+    device: FakeLanDevice, make_client: Callable[..., Client]
 ) -> None:
     client = make_client(device)
     assert await client.device.async_connect() == INITIAL_DPS
@@ -91,7 +91,7 @@ async def test_connect_detects_version_and_reads_status(
 
 
 async def test_configured_version_is_used_directly(
-    device: FakeTuyaDevice, make_client: Callable[..., Client]
+    device: FakeLanDevice, make_client: Callable[..., Client]
 ) -> None:
     client = make_client(device, protocol_version=device.version)
     await client.device.async_connect()
@@ -99,7 +99,7 @@ async def test_configured_version_is_used_directly(
 
 
 async def test_commands_and_pushes_update_state(
-    device: FakeTuyaDevice, make_client: Callable[..., Client]
+    device: FakeLanDevice, make_client: Callable[..., Client]
 ) -> None:
     client = make_client(device)
     await client.device.async_connect()
@@ -115,7 +115,7 @@ async def test_commands_and_pushes_update_state(
 
 
 async def test_reconnects_after_device_drops_connection(
-    device: FakeTuyaDevice, make_client: Callable[..., Client]
+    device: FakeLanDevice, make_client: Callable[..., Client]
 ) -> None:
     client = make_client(device)
     await client.device.async_connect()
@@ -132,7 +132,7 @@ async def test_reconnects_after_device_drops_connection(
 async def test_unanswered_heartbeats_mark_device_unavailable(
     make_client: Callable[..., Client],
 ) -> None:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS))
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS))
     await fake.start()
     try:
         client = make_client(fake)
@@ -149,7 +149,7 @@ async def test_unanswered_heartbeats_mark_device_unavailable(
 
 
 async def test_heartbeats_keep_an_idle_connection(
-    device: FakeTuyaDevice, make_client: Callable[..., Client]
+    device: FakeLanDevice, make_client: Callable[..., Client]
 ) -> None:
     client = make_client(device)
     await client.device.async_connect()
@@ -162,7 +162,7 @@ async def test_heartbeats_keep_an_idle_connection(
 
 
 async def test_full_status_poll_catches_missed_changes(make_client: Callable[..., Client]) -> None:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS))
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS))
     await fake.start()
     try:
         client = make_client(fake)
@@ -174,7 +174,7 @@ async def test_full_status_poll_catches_missed_changes(make_client: Callable[...
 
 
 async def test_command_without_push_is_read_back(make_client: Callable[..., Client]) -> None:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS), push_on_control=False)
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS), push_on_control=False)
     await fake.start()
     try:
         client = make_client(fake)
@@ -192,7 +192,7 @@ async def test_command_without_push_is_read_back(make_client: Callable[..., Clie
 async def test_wrong_local_key(
     version: str, configured: str, make_client: Callable[..., Client]
 ) -> None:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, version, dict(INITIAL_DPS))
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, version, dict(INITIAL_DPS))
     await fake.start()
     try:
         client = make_client(
@@ -208,7 +208,7 @@ async def test_wrong_local_key(
 
 
 async def test_nothing_listening(make_client: Callable[..., Client]) -> None:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3")
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3")
     await fake.start()
     await fake.stop()  # the port is now closed
     client = make_client(fake)
@@ -217,14 +217,14 @@ async def test_nothing_listening(make_client: Callable[..., Client]) -> None:
 
 
 async def test_commands_need_a_connection(make_client: Callable[..., Client]) -> None:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3")
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3")
     client = make_client(fake, port=1)
     with pytest.raises(DeviceUnreachableError):
         await client.device.async_set_dps({"1": True})
 
 
 async def test_background_loop_connects_and_retries(make_client: Callable[..., Client]) -> None:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.4", dict(INITIAL_DPS))
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.4", dict(INITIAL_DPS))
     await fake.start()
     port = fake.port
     await fake.stop()
@@ -243,7 +243,7 @@ async def test_background_loop_connects_and_retries(make_client: Callable[..., C
 
 async def test_new_local_key_reconnects(make_client: Callable[..., Client]) -> None:
     """After re-pairing the key changes; the client picks up the new one."""
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.4", dict(INITIAL_DPS))
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.4", dict(INITIAL_DPS))
     await fake.start()
     try:
         client = make_client(fake)
@@ -263,8 +263,8 @@ async def test_new_local_key_reconnects(make_client: Callable[..., Client]) -> N
 
 async def test_new_address_reconnects(make_client: Callable[..., Client]) -> None:
     """The device moved (new DHCP lease): the client follows the new address."""
-    old = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3", {"1": False})
-    new = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3", {"1": True})
+    old = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3", {"1": False})
+    new = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3", {"1": True})
     await old.start()
     await new.start()
     try:
@@ -281,7 +281,7 @@ async def test_new_address_reconnects(make_client: Callable[..., Client]) -> Non
 
 
 async def test_close_is_quick_and_idempotent(
-    device: FakeTuyaDevice, make_client: Callable[..., Client]
+    device: FakeLanDevice, make_client: Callable[..., Client]
 ) -> None:
     client = make_client(device)
     await client.device.async_connect()
@@ -294,9 +294,9 @@ async def test_close_is_quick_and_idempotent(
 
 async def test_close_aborts_a_connection_attempt() -> None:
     """Closing while connecting to a silent device does not wait for every protocol."""
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.4", dict(INITIAL_DPS), silent=True)
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.4", dict(INITIAL_DPS), silent=True)
     await fake.start()
-    device = TuyaLanDevice(
+    device = LanDevice(
         DeviceConfig(DEVICE_ID, "127.0.0.1", LOCAL_KEY, port=fake.port),
         timings=Timings(connect_timeout=5.0),
     )
@@ -313,15 +313,15 @@ async def test_close_aborts_a_connection_attempt() -> None:
 async def test_local_key_not_logged(
     make_client: Callable[..., Client], caplog: pytest.LogCaptureFixture
 ) -> None:
-    """tinytuya logs the key at debug level; the redaction filter removes it."""
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS))
+    """The protocol library logs the key at debug level; the redaction filter removes it."""
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, "3.3", dict(INITIAL_DPS))
     await fake.start()
     caplog.set_level(logging.DEBUG)
     try:
         client = make_client(fake, local_key=WRONG_KEY, protocol_version="3.3")
         with pytest.raises(InvalidLocalKeyError):
             await client.device.async_connect()
-        assert "local key" in caplog.text  # tinytuya's message is there...
+        assert "local key" in caplog.text  # the library's message is there...
         assert WRONG_KEY not in caplog.text  # ...without the key
         assert WRONG_KEY not in repr(client.device)
     finally:

@@ -36,13 +36,13 @@ from custom_components.birdie.const import (
     DOMAIN,
     PURIFIER_KEY_FAILURES_BEFORE_REAUTH,
 )
-from custom_components.birdie.purifier.coordinator import DATA_SETUP_KEY_FAILURES
-from custom_components.birdie.purifier.discovery import async_scan
-from custom_components.birdie.tuya_lan import (
+from custom_components.birdie.lan import (
     DeviceUnreachableError,
     DiscoveredDevice,
     InvalidLocalKeyError,
 )
+from custom_components.birdie.purifier.coordinator import DATA_SETUP_KEY_FAILURES
+from custom_components.birdie.purifier.discovery import async_scan
 
 from .helpers import (
     DEVICE_ID,
@@ -321,7 +321,7 @@ async def test_follows_new_ip_address(hass: HomeAssistant, entry, fake_lan: Fake
 async def test_only_searches_send_discovery_requests(
     hass: HomeAssistant, entry, fake_lan: FakeLan
 ) -> None:
-    """Every Tuya device answers a request; the background listener only listens."""
+    """Every device answers a request; the background listener only listens."""
     (listener,) = [instance for instance in FakeListener.instances if instance.started]
     assert listener.requests == 0
 

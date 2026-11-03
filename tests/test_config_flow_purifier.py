@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import patch
@@ -20,7 +21,7 @@ from custom_components.birdie.const import (
     CONF_PROTOCOL_VERSION,
     DOMAIN,
 )
-from custom_components.birdie.tuya_lan import DeviceUnreachableError, DiscoveredDevice
+from custom_components.birdie.lan import DeviceUnreachableError, DiscoveredDevice, FoundDevice
 
 from .helpers import (
     DEVICE_ID,
@@ -57,6 +58,22 @@ async def _start(hass: HomeAssistant) -> dict[str, Any]:
     await hass.async_block_till_done()
     # Like the frontend's request after the progress event; {} must not break it.
     return await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+
+async def _submit_and_search(
+    hass: HomeAssistant, result: dict[str, Any], values: dict[str, Any]
+) -> dict[str, Any]:
+    """Submit a manual entry without IP and let the network search finish.
+
+    A search that finishes without waiting (as the mocks do) skips the
+    progress screen; a real one shows it.
+    """
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], values)
+    if result["type"] is FlowResultType.SHOW_PROGRESS:
+        assert result["progress_action"] == "network_search"
+        await hass.async_block_till_done()
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    return result
 
 
 def _manual(**overrides: Any) -> dict[str, Any]:
@@ -167,7 +184,8 @@ async def test_manual_without_ip_searches_network(
 
     values = _manual()
     del values[CONF_HOST]
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], values)
+    result = await _submit_and_search(hass, result, values)
+    assert result["step_id"] == "purifier_not_found"
     assert result["errors"] == {CONF_HOST: "device_not_found"}
 
     # Purifier with another product id (not offered in the list) found by id.
@@ -176,6 +194,65 @@ async def test_manual_without_ip_searches_network(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_HOST] == "192.168.1.55"
     assert result["data"][CONF_PRODUCT_KEY] == "unlisted"
+
+
+async def test_manual_without_ip_finds_silent_purifier(hass: HomeAssistant) -> None:
+    """A purifier that never announces itself is found at its address by its key."""
+    result = await _start(hass)
+    values = _manual()
+    del values[CONF_HOST]
+    found = FoundDevice("192.168.1.77", "3.5", {"1": True})
+
+    async def slow_search(*args: Any) -> FoundDevice:
+        await asyncio.sleep(0)
+        return found
+
+    with patch(
+        "custom_components.birdie.config_flow.async_search_network", side_effect=slow_search
+    ) as search:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], values)
+        assert result["type"] is FlowResultType.SHOW_PROGRESS
+        assert result["progress_action"] == "network_search"
+        await hass.async_block_till_done()
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    search.assert_awaited_once_with(hass, DEVICE_ID, LOCAL_KEY, "auto")
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_HOST] == "192.168.1.77"
+    assert result["data"][CONF_DETECTED_VERSION] == "3.5"
+    assert CONF_PRODUCT_KEY not in result["data"]
+
+
+async def test_manual_search_not_found_keeps_input(hass: HomeAssistant) -> None:
+    """After a failed search the form comes back filled in, and an IP address works."""
+    result = await _start(hass)
+    values = _manual(**{CONF_DEVICE_ID: DEVICE_ID})
+    del values[CONF_HOST]
+    with patch("custom_components.birdie.config_flow.async_search_network", return_value=None):
+        result = await _submit_and_search(hass, result, values)
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_HOST: "device_not_found"}
+    suggested = {
+        key.schema: key.description["suggested_value"]
+        for key in result["data_schema"].schema
+        if key.description and "suggested_value" in key.description
+    }
+    assert suggested[CONF_DEVICE_ID] == DEVICE_ID
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], _manual())
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_HOST] == HOST
+
+
+async def test_manual_search_error_is_not_found(hass: HomeAssistant) -> None:
+    result = await _start(hass)
+    values = _manual()
+    del values[CONF_HOST]
+    with patch(
+        "custom_components.birdie.config_flow.async_search_network",
+        side_effect=OSError("network down"),
+    ):
+        result = await _submit_and_search(hass, result, values)
+    assert result["errors"] == {CONF_HOST: "device_not_found"}
 
 
 async def test_already_configured(

@@ -1,17 +1,17 @@
-"""Errors raised by the Tuya LAN client."""
+"""Errors raised by the LAN client."""
 
 from __future__ import annotations
 
 
-class TuyaLanError(Exception):
-    """Base class for Tuya LAN errors."""
+class LanError(Exception):
+    """Base class for LAN errors."""
 
 
-class DeviceUnreachableError(TuyaLanError):
+class DeviceUnreachableError(LanError):
     """No TCP connection to the device, or it stopped answering."""
 
 
-class InvalidLocalKeyError(TuyaLanError):
+class InvalidLocalKeyError(LanError):
     """The device answered but did not accept the local key or protocol version.
 
     The local key changes whenever the device is paired again in the app.

@@ -1,7 +1,7 @@
 # Birdie Podium Air Purifier
 
 Home Assistant controls the Birdie Wi-Fi air purifier directly over your local
-network. No cloud service, Tuya account or Birdie sign-in is involved: you
+network. No cloud service or Birdie sign-in is involved: you
 copy two values from the Birdie app once, and Home Assistant talks to the
 purifier inside your home network.
 
@@ -18,20 +18,18 @@ purifier inside your home network.
   either value in the app to copy it. Tip: open Home Assistant on the same
   phone and you can paste it straight away.
 * Home Assistant 2026.3.0 or newer, with the Birdie integration installed
-  (see the [README](../README.md#installation)). The protocol library
-  (`tinytuya`) is installed by Home Assistant automatically.
+  (see the [README](../README.md#installation)). The library for the local
+  connection is installed by Home Assistant automatically.
 * Home Assistant on the **same network** as the purifier:
   * Automatic discovery listens for the purifier's broadcasts on UDP ports
     6666 and 6667. This works on Home Assistant OS and on Docker with
     `network_mode: host`. Broadcasts do not cross routers or VLANs.
   * Control uses TCP port 6668 on the purifier. If Home Assistant cannot see
-    the broadcasts (Docker bridge network, separate VLAN), enter the
-    purifier's IP address during setup; only TCP 6668 then needs to be
-    reachable.
-  * Some routers and Wi-Fi access points drop broadcasts from wireless
-    devices even when everything is on the same network. A Tuya device on
-    such a network is still reachable on TCP 6668, but it is never listed
-    and the search for its device ID fails: enter its IP address.
+    the broadcasts (Docker bridge network, separate VLAN, or a router that
+    drops broadcasts from wireless devices even on the same network), the
+    purifier is not listed. Setup then finds it with its device ID and key
+    instead (see below), or you enter its IP address; only TCP 6668 needs
+    to be reachable.
 * Recommended: a fixed IP address for the purifier (DHCP reservation in your
   router). Home Assistant also follows the purifier to a new address when it
   sees its broadcasts.
@@ -52,9 +50,13 @@ logs and diagnostics.
      Birdie app (long-press) and paste it. If you have more than one purifier,
      compare the device ID in the list with the one in the app.
    * **It is not listed** (or you choose *Enter manually*): paste the
-     **device ID** and **local key** from the app. Leave the IP address empty
-     to search for that device ID, or enter the IP address if the search does
-     not find it.
+     **device ID** and **local key** from the app and leave the IP address
+     empty. Home Assistant first listens for that device ID; if the purifier
+     does not announce itself, it looks for it at every address of its own
+     network (at most one /24 per network adapter) and tries the key there.
+     Only the purifier the key belongs to accepts it, so it is found without
+     an IP address. This takes up to a minute. Enter the IP address only if
+     it still cannot be found.
 4. Home Assistant connects to the purifier to check the key before it adds
    the device. The protocol version is detected automatically; the
    **Advanced** section lets you choose one if detection fails (the
@@ -155,10 +157,10 @@ Birdie app are not affected.
 
 | Problem | What to check |
 | --- | --- |
-| The purifier is not listed during setup | Home Assistant must receive UDP broadcasts from the purifier's network (Home Assistant OS, or Docker with host networking; same subnet/VLAN), and some routers drop them even then. Choose *Enter manually* and enter the IP address instead (from your router's list of connected devices; the name shown there may not mention Birdie). A warning `Cannot listen for Tuya broadcasts on UDP 6666/6667` in the log means another program holds these ports without sharing them. |
-| "Home Assistant could not find this Podium on your network" | Same as above: enter the IP address (shown in your router's list of connected devices). Then give the purifier a fixed address in the router, because Home Assistant cannot follow address changes it does not see. |
-| "Cannot connect to the air purifier" | The purifier is on and on Wi-Fi; the IP address is correct; TCP port 6668 is reachable from Home Assistant (firewall, VLAN rules, guest Wi-Fi isolation). Close other local Tuya integrations for this purifier (Tuya Local, LocalTuya, a Homey Tuya Local app): the purifier accepts only a few local connections. |
-| "The air purifier did not accept the connection" | Copy the current key from the Birdie app again; it changes when the purifier is set up again. It has exactly 16 characters and is case-sensitive. The purifier also refuses connections while other local controllers (Tuya Local, a Homey app) hold them: close those and try again. If the key is certainly right, choose the protocol version under **Advanced**. |
+| The purifier is not listed during setup | Home Assistant must receive UDP broadcasts from the purifier's network (Home Assistant OS, or Docker with host networking; same subnet/VLAN), and some routers drop them even then. Paste the device ID and key and leave the IP address empty: Home Assistant then looks for the purifier with its key. A warning `Cannot listen for device broadcasts on UDP 6666/6667` in the log means another program holds these ports without sharing them. |
+| "Home Assistant could not find this Podium on your network" | The purifier is off or offline, the key is not the current one from the Birdie app, or it is on another network than Home Assistant (another subnet or VLAN, guest Wi-Fi). Check those, or enter the IP address (shown in your router's list of connected devices; the name there may not mention Birdie). Then give the purifier a fixed address in the router, because Home Assistant cannot follow address changes it does not see. |
+| "Cannot connect to the air purifier" | The purifier is on and on Wi-Fi; the IP address is correct; TCP port 6668 is reachable from Home Assistant (firewall, VLAN rules, guest Wi-Fi isolation). Close other local integrations that control this purifier (in Home Assistant or on a Homey): the purifier accepts only a few local connections. |
+| "The air purifier did not accept the connection" | Copy the current key from the Birdie app again; it changes when the purifier is set up again. It has exactly 16 characters and is case-sensitive. The purifier also refuses connections while other local controllers (another integration, a Homey app) hold them: close those and try again. If the key is certainly right, choose the protocol version under **Advanced**. |
 | Entities are unavailable | The purifier is off at the mains, offline, or has a new IP address (see above). Home Assistant reconnects on its own, retrying every 5 to 60 seconds. If a re-authentication notice appears, enter the new key. |
 | PM2.5 and Air quality show "unknown" | Device status shows "PM2.5 sensor fault": the purifier's sensor does not work; contact Birdie support. |
 | One entity stays unavailable | The purifier has not reported that value (see [Entities](#entities)). Send diagnostics. |
@@ -177,7 +179,6 @@ Birdie app are not affected.
     default: warning
     logs:
       custom_components.birdie: debug
-      tinytuya: debug
   ```
 
   The protocol library logs the local key in some debug messages; the

@@ -18,7 +18,7 @@ CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_BLUETOOTH = "bluetooth"
 ENTRY_TYPE_PURIFIER = "purifier"
 
-# Air purifier (Tuya LAN) entry data.
+# Air purifier (LAN) entry data.
 CONF_DEVICE_ID = "device_id"
 CONF_LOCAL_KEY = "local_key"
 CONF_PROTOCOL_VERSION = "protocol_version"

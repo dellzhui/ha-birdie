@@ -13,7 +13,7 @@ import custom_components.birdie.config_flow
 import custom_components.birdie.purifier.coordinator
 import custom_components.birdie.purifier.discovery
 import custom_components.birdie.purifier.flow  # noqa: F401
-from custom_components.birdie.tuya_lan import DiscoveredDevice
+from custom_components.birdie.lan import DiscoveredDevice
 
 from .helpers import FakeLan, FakeListener
 
@@ -22,6 +22,16 @@ from .helpers import FakeLan, FakeListener
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> Iterator[None]:
     """Allow Home Assistant to load custom_components/birdie in every test."""
     yield
+
+
+@pytest.fixture(autouse=True)
+def no_network_search() -> Iterator[None]:
+    """Never search the real local network from a test: no addresses to try."""
+    with patch(
+        "custom_components.birdie.purifier.discovery.async_local_ipv4_interfaces",
+        return_value=[],
+    ):
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -45,10 +55,10 @@ def lan_broadcasts() -> Iterator[dict[str, DiscoveredDevice]]:
 
 @pytest.fixture
 def fake_lan() -> Iterator[FakeLan]:
-    """Replace the Tuya LAN client used by the config flow and the coordinator."""
+    """Replace the LAN client used by the config flow and the coordinator."""
     lan = FakeLan()
     with (
-        patch("custom_components.birdie.purifier.coordinator.TuyaLanDevice", lan.factory),
-        patch("custom_components.birdie.purifier.flow.TuyaLanDevice", lan.factory),
+        patch("custom_components.birdie.purifier.coordinator.LanDevice", lan.factory),
+        patch("custom_components.birdie.purifier.flow.LanDevice", lan.factory),
     ):
         yield lan

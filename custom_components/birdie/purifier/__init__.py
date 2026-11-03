@@ -1,1 +1,1 @@
-"""Birdie air purifier (Tuya-based Wi-Fi device, controlled over the local network)."""
+"""Birdie air purifier (Wi-Fi device, controlled over the local network)."""

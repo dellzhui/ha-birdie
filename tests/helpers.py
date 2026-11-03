@@ -19,11 +19,11 @@ from custom_components.birdie.const import (
     DOMAIN,
     ENTRY_TYPE_PURIFIER,
 )
-from custom_components.birdie.tuya_lan import (
+from custom_components.birdie.lan import (
     DeviceConfig,
     DeviceUnreachableError,
     DiscoveredDevice,
-    TuyaLanError,
+    LanError,
 )
 
 DEVICE_ID = "bf3a9c71d2e04b58f6qz1x"
@@ -85,15 +85,15 @@ def discovered(**overrides: Any) -> DiscoveredDevice:
 
 
 class FakeLan:
-    """Controls the in-memory devices that replace ``TuyaLanDevice``."""
+    """Controls the in-memory devices that replace ``LanDevice``."""
 
     def __init__(self) -> None:
         self.dps: dict[str, Any] = copy.deepcopy(PURIFIER_DPS)
         self.version = "3.3"
         self.accepted_key = LOCAL_KEY
         # Set to an exception instance to make connecting / commands fail.
-        self.connect_error: TuyaLanError | None = None
-        self.command_error: TuyaLanError | None = None
+        self.connect_error: LanError | None = None
+        self.command_error: LanError | None = None
         # Addresses where nothing answers (the purifier moved away).
         self.unreachable_hosts: set[str] = set()
         self.devices: list[FakeLanDevice] = []
@@ -112,7 +112,7 @@ class FakeLan:
 
 
 class FakeLanDevice:
-    """In-memory stand-in for ``TuyaLanDevice`` (same public API)."""
+    """In-memory stand-in for ``LanDevice`` (same public API)."""
 
     def __init__(
         self,
@@ -120,8 +120,8 @@ class FakeLanDevice:
         config: DeviceConfig,
         *,
         on_status: Callable[[dict[str, Any]], None] | None = None,
-        on_availability: Callable[[bool, TuyaLanError | None], None] | None = None,
-        on_error: Callable[[TuyaLanError], None] | None = None,
+        on_availability: Callable[[bool, LanError | None], None] | None = None,
+        on_error: Callable[[LanError], None] | None = None,
         version_hint: str | None = None,
         **_: Any,
     ) -> None:
@@ -135,7 +135,7 @@ class FakeLanDevice:
         self.available = False
         self.started = False
         self.closed = False
-        self.last_error: TuyaLanError | None = None
+        self.last_error: LanError | None = None
         self.dps: dict[str, Any] = {}
 
     def _check(self) -> None:
@@ -144,7 +144,7 @@ class FakeLanDevice:
         if self.config.host in self._lan.unreachable_hosts:
             raise DeviceUnreachableError("no answer")
         if self.config.local_key != self._lan.accepted_key:
-            from custom_components.birdie.tuya_lan import InvalidLocalKeyError
+            from custom_components.birdie.lan import InvalidLocalKeyError
 
             raise InvalidLocalKeyError("The device did not accept the local key")
 
@@ -189,13 +189,13 @@ class FakeLanDevice:
         assert self._on_status is not None
         self._on_status(dict(self.dps))
 
-    def go_offline(self, error: TuyaLanError | None = None) -> None:
+    def go_offline(self, error: LanError | None = None) -> None:
         self.available = False
         self.last_error = error or DeviceUnreachableError("The device stopped answering")
         assert self._on_availability is not None
         self._on_availability(False, self.last_error)
 
-    def fail_reconnect(self, error: TuyaLanError) -> None:
+    def fail_reconnect(self, error: LanError) -> None:
         self.last_error = error
         assert self._on_error is not None
         self._on_error(error)

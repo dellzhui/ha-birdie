@@ -1,8 +1,8 @@
-"""Keep local keys out of tinytuya's debug log.
+"""Keep local keys out of the protocol library's debug log.
 
-tinytuya logs the local key in a few debug messages (for example when a
-status request fails). This filter replaces every registered key in records
-from the ``tinytuya`` loggers, so enabling debug logging for troubleshooting
+The protocol library logs the local key in a few debug messages (for example
+when a status request fails). This filter replaces every registered key in
+records from the library's loggers, so enabling debug logging for troubleshooting
 does not expose it.
 """
 
@@ -41,7 +41,7 @@ _FILTER = _RedactLocalKeys()
 
 
 def _install() -> None:
-    """Attach the filter to every tinytuya logger (filters do not propagate)."""
+    """Attach the filter to every logger of the library (filters do not propagate)."""
     names = ["tinytuya"] + [
         name for name in logging.root.manager.loggerDict if name.startswith("tinytuya.")
     ]
@@ -52,12 +52,12 @@ def _install() -> None:
 
 
 def _variants(secret: str) -> set[str]:
-    # tinytuya logs keys as bytes (%r), which escapes some characters.
+    # The library logs keys as bytes (%r), which escapes some characters.
     return {secret, repr(secret.encode("latin1", "replace"))[2:-1]}
 
 
 def register_secret(secret: str) -> None:
-    """Redact ``secret`` from tinytuya log records until it is unregistered."""
+    """Redact ``secret`` from the library's log records until it is unregistered."""
     if not secret:
         return
     _install()

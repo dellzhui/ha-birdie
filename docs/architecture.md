@@ -1,76 +1,62 @@
 # Architecture: Birdie Podium Air Purifier in Home Assistant
 
-Status: local LAN control selected (2026-10-26); first real-device probe 2026-10-26. Last reviewed 2026-10-26.
+Status: local network control; real-device probe 2026-10-26; Home Assistant on
+a real Podium at Birdie 2026-11-02. Last reviewed 2026-11-03.
 
-The purifier is a Tuya-based Wi-Fi device named **Podium** (confirmed by
-Birdie). "Pedestal" was its development name and is still used in the Tuya
-console and on early units (`purifier/model.py`, `MODEL_NAME`).
+The purifier is a Wi-Fi device named **Podium** (confirmed by Birdie).
+"Pedestal" was its development name and is still used in Birdie's product
+definition and on early units (`purifier/model.py`, `MODEL_NAME`).
 
 ## Decision
 
-Home Assistant talks to the purifier **directly over the local network** with
-the Tuya LAN protocol, using the device ID and local key the user copies from
-the Birdie app. Normal operation needs no cloud API, no Tuya IoT Core
-subscription, no Tuya cloud credentials and no Birdie backend.
+Home Assistant talks to the purifier **directly over the local network**,
+using the device ID and local key the user copies from the Birdie app.
+Normal operation needs no cloud API, no cloud credentials and no Birdie
+backend.
 
 ```
-Birdie app ── BLE pairing, Wi-Fi setup ──> Purifier ── (own firmware traffic) ──> Tuya Cloud
+Birdie app ── BLE pairing, Wi-Fi setup ──> Purifier ── (own firmware traffic) ──> Birdie's cloud
    │ shows device ID + local key              ▲
-   ▼                                          │ Tuya LAN protocol (TCP 6668, encrypted)
+   ▼                                          │ local protocol (TCP 6668, encrypted)
 User ── enters them once ──> Home Assistant ──┘ + UDP 6666/6667 announcements
 ```
 
-The purifier keeps talking to the Tuya cloud for the Birdie app as before;
-Home Assistant does not depend on that.
+The purifier keeps talking to the cloud for the Birdie app as before; Home
+Assistant does not depend on that.
 
-Birdie validated this route on Homey with an existing Tuya Local
-app (power on/off). The probe tool then confirmed on a real purifier that
-status, pushes, power and every mode work over the LAN (see Data points).
-
-### Why the cloud route was dropped
-
-An earlier design (kept in git: branch `feature/pedestal-cloud`, tag
-`pedestal-cloud-final`) used a "Birdie Cloud Bridge" holding the Tuya cloud
-project secret, with OAuth sign-in for Birdie accounts. Birdie does not want
-the paid Tuya IoT Core service that route needs (polling every user's devices
-exceeds the trial quota), and it needs hosting plus a Firebase identity
-integration. The LAN route needs none of that. Kept from that work: the
-Home Assistant entities, the fan/preset mapping, the DP decoding and the
-tests around them.
+Birdie validated local control on Homey first (power on/off). The probe tool
+then confirmed on a real purifier that status, pushes, power and every mode
+work over the LAN (see Data points), and Birdie ran this integration on a
+real Podium.
 
 ## Components
 
 | Path | Role | Home Assistant imports |
 |---|---|---|
-| `custom_components/birdie/tuya_lan/` | LAN client: connection, status, DP writes, reconnect, discovery, log redaction | none |
+| `custom_components/birdie/lan/` | LAN client: connection, status, DP writes, reconnect, discovery, search by key, log redaction | none |
 | `custom_components/birdie/purifier/model.py` | The only place that knows the purifier's DPs: decode state, build DP writes | none |
-| `custom_components/birdie/purifier/` (rest) | Coordinator, entities, config flow helpers, shared discovery | yes |
+| `custom_components/birdie/purifier/` (rest) | Coordinator, entities, config flow helpers, shared discovery, network search | yes |
 | `custom_components/birdie/config_flow.py` | UI setup for Bluetooth devices and purifiers | yes |
 | `tools/purifier_probe.py` | Real-device checks on the customer's network | none |
-| `tools/fake_purifier.py`, `tests/tuya_lan/fake_device.py` | Simulated purifier speaking the LAN protocol | none |
+| `tools/fake_purifier.py`, `tests/lan/fake_device.py` | Simulated purifier speaking the LAN protocol | none |
 
 The Bluetooth (Birdie Pro) part of the integration is unchanged.
 
-### Tuya LAN library
+The protocol framing, its encryption (AES-ECB/GCM), the 3.4/3.5 session key
+negotiation and the decryption of announcements come from an MIT-licensed
+protocol library, pinned in `manifest.json` (`requirements`). They are not
+reimplemented; only the device side used by the test simulator is assembled
+from the library's primitives.
 
-| Project | License | Use |
-|---|---|---|
-| [tinytuya](https://github.com/jasonacox/tinytuya) 1.20.0 | MIT | **Dependency.** Protocol 3.1-3.5 framing, AES-ECB/GCM, 3.4/3.5 session key negotiation, UDP announcement decryption. Same pinned version as Tuya Local, so both can be installed together. |
-| [make-all/tuya-local](https://github.com/make-all/tuya-local) | MIT | Reference for how to drive tinytuya from Home Assistant (persistent connection, heartbeats, protocol rotation). No code copied. |
-| [rospogrigio/localtuya](https://github.com/rospogrigio/localtuya) | GPL-3.0 | Reference only (license incompatible with copying into this MIT project). No code copied. |
+### LAN client (`lan.LanDevice`)
 
-The protocol and its encryption are not reimplemented; only the device side
-used by the test simulator is assembled from tinytuya's primitives.
-
-### LAN client (`tuya_lan.TuyaLanDevice`)
-
-* tinytuya does blocking socket I/O. Each device gets one worker thread; all
-  tinytuya calls run there, so they are serialised without locks and never
+* The library does blocking socket I/O. Each device gets one worker thread;
+  all library calls run there, so they are serialised without locks and never
   block the event loop.
 * `async_connect()` opens a persistent connection and reads the full status.
   With protocol "auto" it tries the version from the device's announcement
-  (or the last working one) first, then 3.3, 3.5, 3.4, 3.1. 3.2 (tinytuya's
-  "device22" variant) is used only when configured.
+  (or the last working one) first, then 3.3, 3.5, 3.4, 3.1. 3.2 (the
+  library's "device22" variant) is used only when configured.
 * A background loop sends a heartbeat every 10 s, receives pushed status
   changes, reads the full status every 60 s and 3 s after a command, treats
   35 s without any frame as a lost connection and reconnects with backoff
@@ -80,41 +66,63 @@ used by the test simulator is assembled from tinytuya's primitives.
 * Errors: `DeviceUnreachableError` (nothing answers at the address, timeout)
   and `InvalidLocalKeyError` (the device answered but rejected the key: wrong
   key, or the protocol version does not match).
-* tinytuya logs the local key in some debug messages; a filter on the
-  tinytuya loggers replaces registered keys with `**REDACTED**`.
+* The library logs the local key in some debug messages; a filter on its
+  loggers replaces registered keys with `**REDACTED**`.
 
 ### Discovery
 
-Tuya devices announce themselves every few seconds (UDP 6666 plain, 6667
+Devices announce themselves every few seconds (UDP 6666 plain, 6667
 encrypted with a published key; some 3.5 devices only answer a request sent
 to UDP 7000). The announcement carries device ID, IP, protocol version and
 product ID (`productKey`). The integration recognises Birdie purifiers by
 product ID `a2zf7q0zxcutn5dy`.
 
-* Config flow: searches for 6 s and lists Birdie purifiers; manual entry is
-  always possible. Without an IP address, manual entry searches for the given
-  device ID.
+* Config flow: listens for 6 s and lists Birdie purifiers; manual entry is
+  always possible. Without an IP address, manual entry listens for the given
+  device ID, then searches by key (below).
 * While a purifier is set up, one shared listener follows configured
   purifiers to a new IP address and offers newly seen Birdie purifiers as
   discovered devices in the UI.
-* The discovery request (UDP 7000) is answered by every Tuya device on the
+* The discovery request (UDP 7000) is answered by every such device on the
   network, so it is broadcast only during a search: the 6 s config flow
   search and the address lookup when setup cannot reach the purifier. The
   shared listener never sends anything. The Podium (protocol 3.4) announces
   itself without a request.
-* Sockets use SO_REUSEADDR/SO_REUSEPORT to coexist with other Tuya
-  integrations. Containers need host networking to receive broadcasts.
+* Sockets use SO_REUSEADDR/SO_REUSEPORT to coexist with other integrations.
+  Containers need host networking to receive broadcasts.
+
+### Search by key (`lan.search`)
+
+Some routers drop broadcasts from wireless devices, so neither the
+announcements nor the discovery request get through, while TCP 6668 works.
+When a manual entry without IP address is not heard, the config flow
+searches for it (progress step, up to about a minute):
+
+1. Addresses: for each enabled IPv4 adapter of Home Assistant with a private
+   address, its network, narrowed to the /24 around the address when larger;
+   Home Assistant's own addresses, public, loopback and link-local addresses
+   are skipped; at most 1024 addresses.
+2. Open ports: a TCP connect to port 6668 on each address (64 at a time, 1 s
+   timeout). Nothing is sent.
+3. Key check: on each address that accepted, `LanDevice.async_connect()` with
+   the entered device ID and key (8 at a time, 3 s per protocol version). The
+   first device that answers with its status is the purifier. Other devices
+   cannot decrypt what they receive and refuse the handshake, so they never
+   get a command; all connections are closed.
+
+Nothing is searched in the background: the search runs only when the user
+asks for it during setup.
 
 ### Home Assistant behaviour
 
-* One config entry per purifier (unique ID = Tuya device ID). Entry data:
-  device ID, host, local key, configured protocol ("auto" by default) and the
+* One config entry per purifier (unique ID = device ID). Entry data: device
+  ID, host, local key, configured protocol ("auto" by default) and the
   detected version as a hint for the next start.
 * Setup connects once. Unreachable: look for the purifier's announcement and
   connect at its new address if it moved, otherwise Home Assistant retries
   setup. Key rejected: retried too, and only the third rejection in a row
   starts re-authentication, because with protocol 3.4/3.5 a busy or slow
-  purifier fails the handshake exactly like a wrong key (tinytuya error 914).
+  purifier fails the handshake exactly like a wrong key (library error 914).
 * At runtime the device pushes changes; entities go unavailable when the
   connection is lost and come back with it. Three consecutive key rejections
   while reconnecting start re-authentication (a single rejection can also be
@@ -130,7 +138,7 @@ product ID `a2zf7q0zxcutn5dy`.
 
 ## Data points
 
-Product schema from the Tuya console, and what a real purifier did over the
+Product schema from Birdie's product definition, and what a real purifier did over the
 LAN in the 2026-10-26 probe (protocol 3.4, hardware version HW1.0.0, one unit).
 
 | DP | Code | Schema | Entity | Real device |
@@ -151,8 +159,8 @@ LAN in the 2026-10-26 probe (protocol 3.4, hardware version HW1.0.0, one unit).
 
 | Topic | Owner |
 |---|---|
-| The Birdie app showing the local key to users (Birdie's app team is working on it) | Birdie |
 | filter_status true when a replacement is due, reset_filter behaviour, air_quality values other than `good` | Birdie / later test |
-| Product ID in the purifier's LAN broadcast (the probe was run with a fixed IP address, so discovery was not recorded) | Birdie / later test |
-| Home Assistant on Birdie's network: key change, IP change, power loss, app and Home Assistant connected together | Later test |
+| Product ID in the purifier's LAN broadcast, and why Birdie's Home Assistant did not list the Podium (setup needed the IP address) | Birdie diagnostics |
+| Values from a Podium with a working PM2.5 sensor | Birdie diagnostics |
+| Following an IP address change when broadcasts never arrive (today: fixed address recommended) | Later |
 | Whether other product IDs exist besides `a2zf7q0zxcutn5dy` | Birdie |

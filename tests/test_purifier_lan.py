@@ -1,4 +1,4 @@
-"""End to end in Home Assistant: real Tuya LAN client against the simulated device.
+"""End to end in Home Assistant: real LAN client against the simulated device.
 
 Exercises the actual protocol and encryption over localhost; it is a
 simulation, not a test against Birdie hardware.
@@ -18,8 +18,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, CONF_HOST, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 
+from custom_components.birdie.lan import Timings
 from custom_components.birdie.purifier import coordinator as coordinator_module
-from custom_components.birdie.tuya_lan import Timings
 
 from .helpers import (
     DEVICE_ID,
@@ -29,7 +29,7 @@ from .helpers import (
     mock_purifier_entry,
     purifier_entry_data,
 )
-from .tuya_lan.fake_device import FakeTuyaDevice
+from .lan.fake_device import FakeLanDevice
 
 pytestmark = pytest.mark.usefixtures("socket_enabled")
 
@@ -44,18 +44,18 @@ FAST = Timings(
 
 
 @pytest.fixture(params=["3.3", "3.5"])
-async def device(request: pytest.FixtureRequest) -> AsyncIterator[FakeTuyaDevice]:
-    fake = FakeTuyaDevice(DEVICE_ID, LOCAL_KEY, request.param, dict(PURIFIER_DPS))
+async def device(request: pytest.FixtureRequest) -> AsyncIterator[FakeLanDevice]:
+    fake = FakeLanDevice(DEVICE_ID, LOCAL_KEY, request.param, dict(PURIFIER_DPS))
     await fake.start()
     yield fake
     await fake.stop()
 
 
 @pytest.fixture
-def route_to(device: FakeTuyaDevice) -> Iterator[None]:
+def route_to(device: FakeLanDevice) -> Iterator[None]:
     """Point the integration at the simulated device and use short timings."""
     original = coordinator_module.device_config
-    real_device = coordinator_module.TuyaLanDevice
+    real_device = coordinator_module.LanDevice
 
     def config(data):  # type: ignore[no-untyped-def]
         return replace(original(data), port=device.port)
@@ -65,7 +65,7 @@ def route_to(device: FakeTuyaDevice) -> Iterator[None]:
 
     with (
         patch.object(coordinator_module, "device_config", config),
-        patch.object(coordinator_module, "TuyaLanDevice", make),
+        patch.object(coordinator_module, "LanDevice", make),
     ):
         yield
 
@@ -78,7 +78,7 @@ async def wait_for(hass: HomeAssistant, condition: Callable[[], bool]) -> None:
 
 
 @pytest.mark.usefixtures("route_to")
-async def test_control_and_reconnect(hass: HomeAssistant, device: FakeTuyaDevice) -> None:
+async def test_control_and_reconnect(hass: HomeAssistant, device: FakeLanDevice) -> None:
     entry = mock_purifier_entry(data=purifier_entry_data(**{CONF_HOST: "127.0.0.1"}))
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)

@@ -9,7 +9,7 @@ Wi-Fi air purifier, controlled directly over the local network.
 
 ## Status
 
-Current release: `v0.2.0b3`. It adds the Birdie Podium air purifier, still in
+Current release: `v0.2.0b4`. It adds the Birdie Podium air purifier, still in
 beta (see [docs/remote-testing.md](docs/remote-testing.md)); Birdie Pro setups
 carry on unchanged.
 
@@ -46,11 +46,12 @@ approved, add this repository manually in HACS.
 ## Birdie Podium Air Purifier (In Development)
 
 The Birdie Podium Wi-Fi air purifier is controlled directly over the local network. No
-cloud service, Tuya account or Birdie sign-in is involved: the Birdie app
+cloud service or Birdie sign-in is involved: the Birdie app
 shows the purifier's **device ID** and **local key** (long-press to copy);
 add it with
 **Add integration > Birdie > Podium air purifier (Wi-Fi, local network)**. Home
-Assistant finds the purifier on the network, or you enter its IP address.
+Assistant finds the purifier on the network by itself, also when the router
+blocks its announcements; entering the IP address is the last resort.
 
 Entities: fan (on/off, 4 speeds, presets `auto` and `sleep`), PM2.5, air
 quality, filter life and time remaining, filter replacement, filter cover,
@@ -149,7 +150,6 @@ logger:
   default: warning
   logs:
     custom_components.birdie: debug
-    tinytuya: debug  # air purifier protocol details; local keys are redacted
 ```
 
 ## BLE Probe Tool
@@ -198,9 +198,8 @@ Implemented:
 - Birdie Pro firmware `1.6.0` and `1.6.1` UUID compatibility.
 - HACS-compatible repository structure and validation workflows.
 
-- Birdie Wi-Fi air purifier over the local network (Tuya LAN protocol 3.1-3.5
-  through [tinytuya](https://github.com/jasonacox/tinytuya)): discovery, UI
-  setup, local key updates, fan, sensors, binary sensors and filter reset.
+- Birdie Wi-Fi air purifier over the local network (local protocol 3.1-3.5):
+  discovery, UI setup, local key updates, fan, sensors, binary sensors and filter reset.
   Partly verified on a real purifier (see docs/remote-testing.md).
 
 Not implemented:
