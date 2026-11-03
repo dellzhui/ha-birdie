@@ -48,8 +48,8 @@ service or Birdie sign-in is involved.
 ### What you need
 
 - The purifier set up in the **Birdie app** and connected to your Wi-Fi.
-- Its **device ID** and **local key** from the Birdie app (long-press a value
-  to copy it).
+- Its **device ID** and **local key** from the Birdie app: Settings → Smart
+  Home (under This Podium), with a copy button next to each.
 - Home Assistant on the same network as the purifier (not a guest network or
   a separate VLAN).
 - Recommended: a fixed IP address for the purifier (DHCP reservation in your
