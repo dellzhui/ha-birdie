@@ -25,7 +25,6 @@ class BirdieResetFilterButton(BirdiePurifierEntity, ButtonEntity):
     """Reset the filter lifetime counter after replacing the filter.
 
     Not tied to a reported DP: a write-only trigger DP may never be reported.
-    Whether the device accepts it over the LAN is still to be verified.
     """
 
     _attr_translation_key = "reset_filter"

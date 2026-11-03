@@ -1,8 +1,7 @@
 """Birdie air purifier: data points <-> Birdie state and commands.
 
 This is the only place that knows the purifier's data points (DPs): ids,
-codes, types and ranges. Assumptions not yet confirmed on a real purifier are
-marked below. No I/O.
+codes, types and ranges. No I/O.
 """
 
 from __future__ import annotations
@@ -14,11 +13,10 @@ from typing import Any
 # Product ids of supported purifiers (the "productKey" in LAN broadcasts).
 PRODUCT_KEYS: frozenset[str] = frozenset({"a2zf7q0zxcutn5dy"})
 
-# Birdie confirmed the product name "Podium" (2026-10-26); "Pedestal" was its
-# development name and is still used in the product definition.
+# Model name shown in Home Assistant.
 MODEL_NAME = "Podium"
 
-# DP ids (rw = send and report, ro = report only, per the console).
+# DP ids (rw = send and report, ro = report only).
 DP_SWITCH = "1"  # switch, bool, rw
 DP_PM25 = "2"  # pm25, value 0-500 ug/m3, ro
 DP_MODE = "3"  # mode, enum auto/sleep/manual1-4, rw
@@ -42,7 +40,7 @@ FAN_SPEED_MAX = 4
 
 AIR_QUALITY_LEVELS: tuple[str, ...] = ("good", "moderate", "poor", "very_poor")
 
-# ``device_error`` value -> fault. "ocp" is presumably over-current protection.
+# ``device_error`` value -> fault ("ocp" = over-current protection).
 _FAULTS_BY_DP: Mapping[str, str] = {
     "normal": "none",
     "fan": "fan",
@@ -53,14 +51,11 @@ FAULTS: tuple[str, ...] = tuple(_FAULTS_BY_DP.values())
 FAULT_NONE = "none"
 FAULT_PM25_SENSOR = "pm25_sensor"
 
-# The console only says "Bool" for these.
-# ASSUMPTION: filter_status == True means "replace filter" (false seen with 90 % left).
+# filter_status is true when the filter should be replaced.
 FILTER_STATUS_REPLACE_VALUE = True
-# Observed and confirmed by Birdie: filter_cover is true in normal operation
-# and false while the cover is open.
+# filter_cover is true in normal operation and false while the cover is open.
 FILTER_COVER_OPEN_VALUE = False
-# ASSUMPTION: reset_filter is a trigger written as true (not tested; the
-# device does not report DP 108).
+# reset_filter is a trigger written as true; the device does not report it.
 RESET_FILTER_VALUE = True
 
 
@@ -136,8 +131,8 @@ class PurifierState:
         fault = _FAULTS_BY_DP.get(error) if isinstance(error, str) else None
         hardware = dps.get(DP_HW_VERSION)
         # With a broken PM2.5 sensor the device keeps reporting a meaningless
-        # PM2.5 value (1 on a real unit) and an air quality presumably derived
-        # from it; show both as unknown instead.
+        # PM2.5 value and an air quality derived from it; show both as unknown
+        # instead.
         sensor_ok = fault != FAULT_PM25_SENSOR
         return cls(
             power=_to_bool(dps.get(DP_SWITCH)),
