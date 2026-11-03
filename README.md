@@ -100,7 +100,7 @@ integration entry.
 | The purifier is not listed | Use *Enter manually* with the device ID and local key (see above). |
 | Cannot connect | The purifier is on and on the same network as Home Assistant. Close other local controllers of this purifier (another integration or hub); it accepts only a few connections. |
 | The key is not accepted | Copy the current key from the Birdie app again; it changes when the purifier is set up again. |
-| Entities are unavailable | The purifier is off, offline or has a new IP address. Home Assistant reconnects on its own. |
+| Entities are unavailable | The purifier is off, offline or has a new IP address. Home Assistant reconnects on its own when it can find the purifier; if it got a new address and stays unavailable, enter it with **Reconfigure** (a fixed IP address avoids this). |
 
 When reporting a problem, attach the diagnostics (**Download diagnostics** on
 the purifier's device page); the local key and IP address are removed from

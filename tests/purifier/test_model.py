@@ -35,7 +35,7 @@ def test_state_from_dps() -> None:
     assert not state.reported("999")
 
 
-# DPs a real purifier reported over the LAN (2026-10-26 probe, protocol 3.4).
+# DPs as a real purifier reports them over the LAN.
 REAL_DEVICE_DPS = {
     "1": True,
     "2": 1,
