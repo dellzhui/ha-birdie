@@ -170,6 +170,11 @@ class LanDevice:
         return self._version
 
     @property
+    def closed(self) -> bool:
+        """Whether ``async_close()`` was called; a closed device cannot reconnect."""
+        return self._closed
+
+    @property
     def available(self) -> bool:
         return self._available
 

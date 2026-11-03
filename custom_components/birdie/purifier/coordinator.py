@@ -7,12 +7,15 @@ and on connection loss, and reconnects on its own.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from collections import Counter
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
@@ -43,6 +46,29 @@ type BirdiePurifierConfigEntry = ConfigEntry[BirdiePurifierCoordinator]
 
 # Key rejections while setting up, per config entry; kept across setup retries.
 DATA_SETUP_KEY_FAILURES = f"{DOMAIN}_setup_key_failures"
+
+# A purifier that stays unreachable may have a new address that it could not
+# announce (some routers drop broadcasts). After this many seconds Home
+# Assistant looks for it with its key; while it is not found, the searches
+# back off from one hour to one day.
+ADDRESS_SEARCH_AFTER = 10 * 60
+ADDRESS_SEARCH_FIRST_INTERVAL = 60 * 60
+ADDRESS_SEARCH_MAX_INTERVAL = 24 * 60 * 60
+DATA_ADDRESS_SEARCH = f"{DOMAIN}_address_search"
+
+
+def _monotonic() -> float:
+    return time.monotonic()
+
+
+@dataclass
+class AddressSearch:
+    """Search bookkeeping per config entry, kept across setup retries."""
+
+    unreachable_since: float | None = None
+    next_search: float | None = None
+    interval: float = ADDRESS_SEARCH_FIRST_INTERVAL
+    task: asyncio.Task[None] | None = None
 
 
 def device_config(data: Mapping[str, Any]) -> DeviceConfig:
@@ -79,12 +105,15 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
             version_hint=entry.data.get(CONF_DETECTED_VERSION),
         )
         self._key_failures = 0
+        searches: dict[str, AddressSearch] = hass.data.setdefault(DATA_ADDRESS_SEARCH, {})
+        self._address_search = searches.setdefault(entry.entry_id, AddressSearch())
 
     async def _async_setup(self) -> None:
         """Connect once before the first refresh.
 
         If nothing answers at the stored address, the purifier may have a new
-        one (DHCP): look for its announcement and connect there. A rejected
+        one (DHCP): look for its announcement and connect there. If it stays
+        unreachable, it is also looked for by its key (``_async_note_unreachable``). A rejected
         key asks for a new one only after repeated rejections, because a busy
         or slow purifier fails the protocol 3.4/3.5 handshake the same way.
         """
@@ -108,12 +137,14 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
                 translation_domain=DOMAIN, translation_key="invalid_local_key"
             ) from err
         except LanError as err:
+            self._async_note_unreachable()
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="device_unreachable",
                 translation_placeholders={"host": self.device.config.host},
             ) from err
         key_failures.pop(entry_id, None)
+        self._async_note_reachable()
         self._async_store_detected_version()
 
     async def _async_follow_announced_host(self) -> bool:
@@ -126,6 +157,55 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
             return False
         await self.async_set_host(announced.host)
         return True
+
+    @callback
+    def _async_note_reachable(self) -> None:
+        search = self._address_search
+        search.unreachable_since = search.next_search = None
+        search.interval = ADDRESS_SEARCH_FIRST_INTERVAL
+
+    @callback
+    def _async_note_unreachable(self) -> None:
+        """Start a search by key once the purifier has been gone long enough."""
+        search = self._address_search
+        now = _monotonic()
+        if search.unreachable_since is None:
+            search.unreachable_since = now
+            return
+        if search.task is not None and not search.task.done():
+            return
+        if now - search.unreachable_since < ADDRESS_SEARCH_AFTER:
+            return
+        if search.next_search is not None and now < search.next_search:
+            return
+        search.next_search = now + search.interval
+        search.interval = min(search.interval * 2, ADDRESS_SEARCH_MAX_INTERVAL)
+        # Not tied to this coordinator: after a failed setup it is discarded,
+        # and the result is meant for the next setup attempt.
+        search.task = self.hass.async_create_background_task(
+            self._async_search_address(), name=f"{DOMAIN}_address_search_{self.device_id[-6:]}"
+        )
+
+    async def _async_search_address(self) -> None:
+        from .discovery import async_search_network  # late: discovery imports this module
+
+        entry = self.config_entry
+        found = await async_search_network(
+            self.hass,
+            self.device_id,
+            entry.data[CONF_LOCAL_KEY],
+            entry.data.get(CONF_PROTOCOL_VERSION, PROTOCOL_AUTO),
+        )
+        if found is None:
+            _LOGGER.debug("Birdie air purifier %s not found on the network", self.device_id)
+            return
+        if self.hass.config_entries.async_get_entry(entry.entry_id) is None:
+            return  # removed meanwhile
+        await self.async_set_host(found.host)
+        if entry.state is not ConfigEntryState.LOADED:
+            # Setup failed or is failing: try again at the new address now
+            # instead of waiting for the next retry.
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
 
     async def _async_update_data(self) -> PurifierState:
         """Read the full status (first refresh and manual entity updates)."""
@@ -170,7 +250,8 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
         self.hass.config_entries.async_update_entry(
             self.config_entry, data={**self.config_entry.data, CONF_HOST: host}
         )
-        await self.device.async_reconfigure(host=host)
+        if not self.device.closed:
+            await self.device.async_reconfigure(host=host)
 
     # ------------------------------------------------- LAN client callbacks
 
@@ -182,6 +263,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
     def _async_on_availability(self, available: bool, error: LanError | None) -> None:
         if available:
             self._key_failures = 0
+            self._async_note_reachable()
             self._async_store_detected_version()
             # The key works (again): a reauth started while the purifier was
             # busy or rebooting is no longer needed.
@@ -191,6 +273,8 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
                 self.async_set_updated_data(PurifierState.from_dps(self.device.dps))
             return
         _LOGGER.debug("Birdie air purifier %s unavailable: %s", self.device_id, error)
+        if not isinstance(error, InvalidLocalKeyError):
+            self._async_note_unreachable()
         if isinstance(error, InvalidLocalKeyError):
             failure = UpdateFailed(translation_domain=DOMAIN, translation_key="invalid_local_key")
         else:
@@ -205,6 +289,7 @@ class BirdiePurifierCoordinator(DataUpdateCoordinator[PurifierState]):
     def _async_on_error(self, error: LanError) -> None:
         if not isinstance(error, InvalidLocalKeyError):
             self._key_failures = 0
+            self._async_note_unreachable()
             return
         self._key_failures += 1
         if self._key_failures == PURIFIER_KEY_FAILURES_BEFORE_REAUTH:
