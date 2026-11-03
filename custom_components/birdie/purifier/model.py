@@ -1,15 +1,8 @@
 """Birdie air purifier: data points <-> Birdie state and commands.
 
-This is the only place that knows the purifier's data points (DPs). DP ids,
-codes, types and ranges come from Birdie's product definition (product
-"Birdie Pedestal", the development name of the Podium; product id
-a2zf7q0zxcutn5dy).
-
-Observed on a real purifier over the LAN (protocol 3.4, firmware HW1.0.0,
-2026-10-26 probe; docs/remote-testing.md): DPs 1, 2, 3, 21, 105, 106, 107,
-109, 110 and 111 are reported, 108 is not; writes to 1 and 3 work, including
-every mode; changes made in the Birdie app are pushed within a second. The
-remaining assumptions are marked below. No I/O.
+This is the only place that knows the purifier's data points (DPs): ids,
+codes, types and ranges. Assumptions not yet confirmed on a real purifier are
+marked below. No I/O.
 """
 
 from __future__ import annotations

@@ -4,14 +4,13 @@
 [![Hassfest validation](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml/badge.svg)](https://github.com/dellzhui/ha-birdie/actions/workflows/hassfest.yml)
 
 Birdie is a Home Assistant custom integration for Birdie products: Birdie BLE
-air quality monitors, including Birdie Pro, and (in development) the Birdie
-Wi-Fi air purifier, controlled directly over the local network.
+air quality monitors, including Birdie Pro, and (beta) the Birdie Podium Wi-Fi
+air purifier.
 
 ## Status
 
-Current release: `v0.2.0b4`. It adds the Birdie Podium air purifier, still in
-beta (see [docs/remote-testing.md](docs/remote-testing.md)); Birdie Pro setups
-carry on unchanged.
+Current release: `v0.2.0b4`. It adds the Birdie Podium air purifier (beta);
+Birdie Pro setups carry on unchanged.
 
 Birdie is in the HACS default repository: search for **Birdie** in HACS to
 install it.
@@ -25,8 +24,7 @@ install it.
 - Disconnect handling with unavailable entity states.
 - Writable configuration entities for CO2 threshold and cool down period.
 - Standalone BLE probe tool for setup verification and diagnostics.
-- Birdie Wi-Fi air purifier over the local network (in development, see
-  below).
+- Birdie Podium Wi-Fi air purifier (beta, see below).
 - Birdie Pro firmware `1.6.0` and `1.6.1` BLE UUID compatibility.
 
 ## Birdie Pro Entities (Bluetooth)
@@ -42,36 +40,75 @@ install it.
 | CO2 threshold | Number | ppm | Writable, 400-5000 ppm |
 | Cool down period | Number | min | Writable, 1-240 min |
 
-## Birdie Podium Air Purifier (In Development)
+## Birdie Podium Air Purifier (Beta)
 
-The Birdie Podium Wi-Fi air purifier is controlled directly over the local network. No
-cloud service or Birdie sign-in is involved: the Birdie app
-shows the purifier's **device ID** and **local key** (long-press to copy);
-add it with
-**Add integration > Birdie > Podium air purifier (Wi-Fi, local network)**. Home
-Assistant finds the purifier on the network by itself, also when the router
-blocks its announcements; entering the IP address is the last resort.
+Home Assistant controls the purifier inside your home network; no cloud
+service or Birdie sign-in is involved.
 
-Entities: fan (on/off, 4 speeds, presets `auto` and `sleep`), PM2.5, air
-quality, filter life and time remaining, filter replacement, filter cover,
-device status and a reset filter button.
+### What you need
 
-Setup, network requirements, key changes and troubleshooting:
-**[docs/air-purifier.md](docs/air-purifier.md)**.
+- The purifier set up in the **Birdie app** and connected to your Wi-Fi.
+- Its **device ID** and **local key** from the Birdie app (long-press a value
+  to copy it).
+- Home Assistant on the same network as the purifier (not a guest network or
+  a separate VLAN).
+- Recommended: a fixed IP address for the purifier (DHCP reservation in your
+  router).
 
-A first test on a real purifier confirmed the local connection, status
-updates, power and all modes and speeds; the filter replacement and reset
-are not confirmed yet ([docs/remote-testing.md](docs/remote-testing.md)).
-Design notes:
-[docs/architecture.md](docs/architecture.md). Tools:
-`tools/purifier_probe.py` checks a real purifier without Home Assistant,
-`tools/fake_purifier.py` runs a simulated one.
+The local key works like a password for the purifier: do not share it or
+paste it into forum posts or issue reports.
+
+### Add the purifier
+
+1. **Settings > Devices & services > Add integration > Birdie**.
+2. Choose **Podium air purifier (Wi-Fi, local network)**.
+3. If the purifier is listed, select it and paste its local key. If it is
+   not, choose *Enter manually*, paste the device ID and local key and leave
+   the IP address empty: Home Assistant looks for the purifier itself, which
+   can take up to a minute. Enter the IP address only if it is still not
+   found.
+
+### Entities
+
+| Entity | Type | Notes |
+| --- | --- | --- |
+| Purifier | Fan | On/off, speeds 1-4, presets **Auto** and **Sleep** |
+| PM2.5 | Sensor | ug/m3 |
+| Air quality | Sensor | Good, Moderate, Poor, Very poor |
+| Filter life | Sensor | Remaining filter life in % |
+| Filter time remaining | Sensor | Remaining filter time |
+| Filter replacement | Binary sensor | On when the filter should be replaced |
+| Filter cover | Binary sensor | Diagnostic; on when the filter cover is open |
+| Device status | Sensor | Diagnostic |
+| Reset filter | Button | Resets the filter counter after a filter change |
+
+Changes made in the Birdie app or on the purifier show up in Home Assistant
+within seconds.
+
+### When the local key or IP address changes
+
+The local key changes when the purifier is set up again in the Birdie app.
+Home Assistant then asks for the new key under **Settings > Devices &
+services** (**Re-authentication required**). You can also change the key or
+the IP address at any time with **Reconfigure** in the purifier's
+integration entry.
+
+### Troubleshooting
+
+| Problem | What to check |
+| --- | --- |
+| The purifier is not listed | Use *Enter manually* with the device ID and local key (see above). |
+| Cannot connect | The purifier is on and on the same network as Home Assistant. Close other local controllers of this purifier (another integration or hub); it accepts only a few connections. |
+| The key is not accepted | Copy the current key from the Birdie app again; it changes when the purifier is set up again. |
+| Entities are unavailable | The purifier is off, offline or has a new IP address. Home Assistant reconnects on its own. |
+
+When reporting a problem, attach the diagnostics (**Download diagnostics** on
+the purifier's device page); the local key and IP address are removed from
+them.
 
 ## Requirements
 
-Home Assistant 2026.3.0 or newer (needed for the bundled brand images; the
-air purifier support was verified on 2026.9.2 and 2026.10.4 against a
-simulated purifier and with the 2026.10 test framework).
+Home Assistant 2026.3.0 or newer.
 
 ## Installation
 
@@ -184,15 +221,13 @@ Implemented:
 - Birdie Pro firmware `1.6.0` and `1.6.1` UUID compatibility.
 - HACS-compatible repository structure and validation workflows.
 
-- Birdie Wi-Fi air purifier over the local network (local protocol 3.1-3.5):
-  discovery, UI setup, local key updates, fan, sensors, binary sensors and filter reset.
-  Partly verified on a real purifier (see docs/remote-testing.md).
+- Birdie Podium Wi-Fi air purifier (beta): discovery, UI setup, local key
+  updates, fan, sensors, binary sensors and filter reset.
 
 Not implemented:
 
 - OTA update.
 - Data log service support.
-- Home Assistant Core submission.
 - Device firmware changes.
 
 ## License
