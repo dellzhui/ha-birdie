@@ -13,9 +13,8 @@ Current release: `v0.2.0b4`. It adds the Birdie Podium air purifier, still in
 beta (see [docs/remote-testing.md](docs/remote-testing.md)); Birdie Pro setups
 carry on unchanged.
 
-The integration is available for installation through HACS as a custom
-repository. Submission to the HACS default repository is in progress; until it is
-approved, add this repository manually in HACS.
+Birdie is in the HACS default repository: search for **Birdie** in HACS to
+install it.
 
 ## Features
 
@@ -76,26 +75,13 @@ simulated purifier and with the 2026.10 test framework).
 
 ## Installation
 
-### HACS Custom Repository
+### HACS
 
 1. Open HACS.
-2. Go to **Integrations**.
-3. Open the three-dot menu and choose **Custom repositories**.
-4. Add this repository URL:
-
-   ```text
-   https://github.com/dellzhui/ha-birdie
-   ```
-
-5. Select category **Integration**.
-6. Install **Birdie**.
-7. Restart Home Assistant.
-8. Add the integration from **Settings > Devices & services**.
-
-### HACS Default Repository
-
-Once the HACS default repository submission is approved, Birdie will be
-installable by searching for **Birdie** directly in HACS.
+2. Search for **Birdie** and open it.
+3. Select **Download**.
+4. Restart Home Assistant.
+5. Add the integration from **Settings > Devices & services**.
 
 ### Manual Installation
 
