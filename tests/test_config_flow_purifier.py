@@ -29,6 +29,7 @@ from .helpers import (
     LOCAL_KEY,
     NEW_KEY,
     PRODUCT_KEY,
+    PURIFIER_DPS,
     FakeLan,
     discovered,
     mock_purifier_entry,
@@ -201,7 +202,7 @@ async def test_manual_without_ip_finds_silent_purifier(hass: HomeAssistant) -> N
     result = await _start(hass)
     values = _manual()
     del values[CONF_HOST]
-    found = FoundDevice("192.168.1.77", "3.5", {"1": True})
+    found = FoundDevice("192.168.1.77", "3.5", PURIFIER_DPS)
 
     async def slow_search(*args: Any) -> FoundDevice:
         await asyncio.sleep(0)
@@ -241,6 +242,50 @@ async def test_manual_search_not_found_keeps_input(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(result["flow_id"], _manual())
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_HOST] == HOST
+
+
+LIGHT_DPS = {"20": True, "21": "white", "22": 1000}
+
+
+async def test_manual_entry_of_another_device_is_refused(
+    hass: HomeAssistant, fake_lan: FakeLan
+) -> None:
+    """The ID and key of another device (here a light) are not added as a Podium."""
+    fake_lan.dps = dict(LIGHT_DPS)
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], _manual())
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "not_a_podium"}
+    assert not hass.config_entries.async_entries(DOMAIN)
+    assert fake_lan.sent == []
+
+
+async def test_search_finding_another_device_is_refused(hass: HomeAssistant) -> None:
+    result = await _start(hass)
+    values = _manual()
+    del values[CONF_HOST]
+    found = FoundDevice("192.168.1.77", "3.5", dict(LIGHT_DPS))
+    with patch("custom_components.birdie.config_flow.async_search_network", return_value=found):
+        result = await _submit_and_search(hass, result, values)
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "not_a_podium"}
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+
+async def test_discovered_purifier_with_unexpected_report_is_added(
+    hass: HomeAssistant, fake_lan: FakeLan, lan_broadcasts: dict[str, DiscoveredDevice]
+) -> None:
+    """A device that announces itself as a Podium is trusted, whatever it reports."""
+    lan_broadcasts[DEVICE_ID] = discovered()
+    fake_lan.dps = {"1": True}
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_DEVICE_ID: DEVICE_ID}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_LOCAL_KEY: LOCAL_KEY}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_manual_search_error_is_not_found(hass: HomeAssistant) -> None:

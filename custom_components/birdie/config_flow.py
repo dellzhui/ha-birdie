@@ -50,7 +50,7 @@ from .purifier.flow import (
     async_check_connection,
     clean_local_key,
 )
-from .purifier.model import MODEL_NAME
+from .purifier.model import MODEL_NAME, PRODUCT_KEYS, looks_like_purifier
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +88,19 @@ class _NetworkSearch:
     user_input: dict[str, Any] = field(repr=False)
     task: asyncio.Task[FoundDevice | None] | None = None
     found: FoundDevice | None = None
+    not_a_podium: bool = False
+
+
+def _is_podium(device_id: str, dps: dict[str, Any] | None, product_key: str | None) -> bool:
+    """Whether the device that accepted the key is a Podium and may be added."""
+    if product_key in PRODUCT_KEYS or looks_like_purifier(dps or {}):
+        return True
+    _LOGGER.warning(
+        "Device %s is not a Birdie Podium (it reports data points %s)",
+        device_id,
+        ", ".join(sorted(dps or {}, key=lambda dp_id: (len(dp_id), dp_id))),
+    )
+    return False
 
 
 def _discovery_title(discovery_info: BluetoothServiceInfoBleak) -> str:
@@ -284,11 +297,14 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 config = DeviceConfig(device.device_id, device.host, key)
                 result = await async_check_connection(config, device.protocol_version)
-                if result.error is None:
+                if result.error is not None:
+                    errors["base"] = result.error
+                elif not _is_podium(config.device_id, result.dps, device.product_key):
+                    errors["base"] = "not_a_podium"
+                else:
                     return await self._async_create_purifier(
                         config, result, product_key=device.product_key
                     )
-                errors["base"] = result.error
         return self.async_show_form(
             step_id="purifier_key",
             data_schema=KEY_SCHEMA,
@@ -315,10 +331,14 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         search, self._search = self._search, None
         if search is not None:
-            # Back from a network search that did not find the purifier. Home
-            # Assistant passes the input that started the search on again.
+            # Back from a network search that did not find the purifier, or
+            # found another device. Home Assistant passes the input that
+            # started the search on again.
             user_input = search.user_input
-            errors[CONF_HOST] = "device_not_found"
+            if search.not_a_podium:
+                errors["base"] = "not_a_podium"
+            else:
+                errors[CONF_HOST] = "device_not_found"
         elif user_input is not None:
             device_id = user_input[CONF_DEVICE_ID].strip()
             key = clean_local_key(user_input[CONF_LOCAL_KEY])
@@ -346,11 +366,14 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
                 assert key is not None
                 config = DeviceConfig(device_id, host, key, version)
                 result = await async_check_connection(config, hint)
-                if result.error is None:
+                if result.error is not None:
+                    errors["base"] = result.error
+                elif not _is_podium(device_id, result.dps, product_key):
+                    errors["base"] = "not_a_podium"
+                else:
                     return await self._async_create_purifier(
                         config, result, product_key=product_key
                     )
-                errors["base"] = result.error
         return self.async_show_form(
             step_id=step_id,
             data_schema=self.add_suggested_values_to_schema(MANUAL_SCHEMA, user_input),
@@ -379,6 +402,8 @@ class BirdieConfigFlow(ConfigFlow, domain=DOMAIN):
             search.found = search.task.result()
         except Exception:
             _LOGGER.exception("Searching the network for %s failed", search.device_id)
+        if search.found is not None and not _is_podium(search.device_id, search.found.dps, None):
+            search.found, search.not_a_podium = None, True
         if search.found is None:
             return self.async_show_progress_done(next_step_id=search.step_id)
         return self.async_show_progress_done(next_step_id="purifier_search_found")

@@ -162,6 +162,33 @@ class PurifierState:
         return self.fault != FAULT_NONE
 
 
+# DPs only this purifier reports (filter minutes, hardware version, device error).
+_PODIUM_ONLY_DPS: tuple[str, ...] = (
+    DP_FILTER_TOTAL_MINUTES,
+    DP_FILTER_USED_MINUTES,
+    DP_HW_VERSION,
+    DP_DEVICE_ERROR,
+)
+
+
+def looks_like_purifier(dps: Mapping[str, Any]) -> bool:
+    """Whether a device's status report is a Podium's.
+
+    An empty report says nothing either way and counts as a Podium. Otherwise
+    the report needs the power switch, a known mode and at least one DP that
+    only this purifier has, so another device's key entered by mistake is
+    refused before Home Assistant sends it purifier commands.
+    """
+    if not dps:
+        return True
+    mode, _ = _decode_mode(dps.get(DP_MODE))
+    return (
+        isinstance(dps.get(DP_SWITCH), bool)
+        and mode is not None
+        and any(dp_id in dps for dp_id in _PODIUM_ONLY_DPS)
+    )
+
+
 # ----------------------------------------------------------------- commands
 
 

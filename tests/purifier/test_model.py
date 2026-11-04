@@ -9,6 +9,7 @@ from custom_components.birdie.purifier.model import (
     PurifierState,
     apply_dps,
     fan_speed_dps,
+    looks_like_purifier,
     mode_dps,
     power_dps,
     reset_filter_dps,
@@ -50,10 +51,21 @@ REAL_DEVICE_DPS = {
 }
 
 
+# Another real purifier, with a working PM2.5 sensor.
+WORKING_SENSOR_DPS = {
+    **REAL_DEVICE_DPS,
+    "106": 1748,
+    "110": "1.0.0",
+    "111": "normal",
+}
+
+
 def test_pm25_values_with_a_working_sensor() -> None:
-    state = PurifierState.from_dps({**REAL_DEVICE_DPS, "2": 8, "111": "normal"})
-    assert state.pm25 == 8
+    state = PurifierState.from_dps(WORKING_SENSOR_DPS)
+    assert state.pm25 == 1
     assert state.air_quality == "good"
+    assert state.fault == "none"
+    assert state.filter_life_percent == 99
 
 
 def test_state_from_real_device_report() -> None:
@@ -152,3 +164,30 @@ def test_apply_dps() -> None:
     assert (updated.power, updated.mode, updated.fan_speed) == (False, "manual", 2)
     # A filter reset is a trigger: no optimistic change.
     assert apply_dps(state, reset_filter_dps()) == state
+
+
+# Status reports of other devices whose key could be entered by mistake.
+LIGHT_DPS = {"20": True, "21": "white", "22": 1000, "23": 0, "24": "000003e803e8"}
+OLD_LIGHT_DPS = {"1": True, "2": "white", "3": 255, "4": 0}
+PLUG_DPS = {"1": True, "9": 0, "18": 0, "19": 0, "20": 2301}
+OTHER_FAN_DPS = {"1": True, "3": "auto", "4": "1"}
+
+
+@pytest.mark.parametrize(
+    ("dps", "expected"),
+    [
+        (PURIFIER_DPS, True),
+        (REAL_DEVICE_DPS, True),
+        (WORKING_SENSOR_DPS, True),
+        ({**REAL_DEVICE_DPS, "3": "manual2", "1": False}, True),
+        ({}, True),  # nothing reported: no reason to refuse
+        (LIGHT_DPS, False),
+        (OLD_LIGHT_DPS, False),
+        (PLUG_DPS, False),
+        (OTHER_FAN_DPS, False),
+        ({**REAL_DEVICE_DPS, "3": "turbo"}, False),
+        ({**REAL_DEVICE_DPS, "1": 1}, False),
+    ],
+)
+def test_looks_like_purifier(dps: dict, expected: bool) -> None:
+    assert looks_like_purifier(dps) is expected

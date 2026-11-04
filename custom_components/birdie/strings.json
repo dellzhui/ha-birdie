@@ -15,6 +15,7 @@
       "device_not_found": "Home Assistant could not find this Podium on your network. Check that it is switched on and connected to Wi-Fi, and that the local key is the current one from the Birdie app (it changes when the Podium is added again). If it is still not found, enter its IP address: you find it in your router's list of connected devices (in its web page or app).",
       "cannot_connect": "Cannot reach the air purifier. Make sure it is switched on and connected to Wi-Fi, and that the IP address is right (see your router's list of connected devices), then try again.",
       "invalid_local_key": "The air purifier did not accept this local key. The key changes every time the purifier is added again in the Birdie app, so copy the current one. Close other apps that control the purifier on your local network (such as Homey) and try again.",
+      "not_a_podium": "The device that accepted this device ID and key is not a Birdie Podium air purifier, so it was not added. Copy the device ID and key of your Podium in the Birdie app (Settings → Smart Home, under This Podium).",
       "unknown": "Unexpected error. See the Home Assistant log for details."
     },
     "progress": {
