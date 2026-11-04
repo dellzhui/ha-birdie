@@ -9,7 +9,7 @@ air purifier.
 
 ## Status
 
-Current release: `v0.2.0b4`. It adds the Birdie Podium air purifier (beta);
+Current release: `v0.2.0b5`. It adds the Birdie Podium air purifier (beta);
 Birdie Pro setups carry on unchanged.
 
 Birdie is in the HACS default repository: search for **Birdie** in HACS to
