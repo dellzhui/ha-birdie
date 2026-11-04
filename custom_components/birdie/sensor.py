@@ -63,7 +63,7 @@ SENSORS: tuple[BirdieSensorEntityDescription, ...] = (
     ),
     BirdieSensorEntityDescription(
         key="state",
-        name="State",
+        translation_key="state",
         device_class=SensorDeviceClass.ENUM,
         options=["up", "down", "cooldown", UNKNOWN_STATE],
         value_fn=lambda data: data.birdie_state_value,

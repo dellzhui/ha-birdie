@@ -34,7 +34,7 @@ class BirdieNumberEntityDescription(NumberEntityDescription):
 NUMBERS: tuple[BirdieNumberEntityDescription, ...] = (
     BirdieNumberEntityDescription(
         key="co2_threshold",
-        name="CO2 threshold",
+        translation_key="co2_threshold",
         native_unit_of_measurement=PARTS_PER_MILLION,
         native_min_value=400,
         native_max_value=5000,
@@ -46,7 +46,7 @@ NUMBERS: tuple[BirdieNumberEntityDescription, ...] = (
     ),
     BirdieNumberEntityDescription(
         key="cool_down_period",
-        name="Cool down period",
+        translation_key="cool_down_period",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         native_min_value=1,
         native_max_value=240,
